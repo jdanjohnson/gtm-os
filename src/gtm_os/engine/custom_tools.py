@@ -235,6 +235,130 @@ def build_custom_tools(
     async def _list_plays() -> dict[str, Any]:
         return {"ok": True, "plays": play_id_enum}
 
+    # WS3B: Metrics tools.
+    async def _save_metric(
+        experiment_id: str,
+        metric_name: str,
+        metric_value: float,
+        variant: str | None = None,
+    ) -> dict[str, Any]:
+        metric_id = store.save_metric(
+            experiment_id=experiment_id,
+            metric_name=metric_name,
+            metric_value=float(metric_value),
+            variant=variant,
+        )
+        return {"ok": True, "metric_id": metric_id}
+
+    async def _compare_to_hypothesis(experiment_id: str) -> dict[str, Any]:
+        exp = store.get_experiment(experiment_id)
+        if not exp:
+            return {"ok": False, "error": "not_found"}
+        summary = store.get_metric_summary(experiment_id)
+        hypothesis = exp.hypothesis or "No hypothesis set"
+        return {
+            "ok": True,
+            "hypothesis": hypothesis,
+            "metrics": summary["metrics"],
+            "experiment": exp.name,
+        }
+
+    # WS3D: Template tools.
+    async def _save_as_template(
+        experiment_id: str,
+        template_name: str,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        exp = store.get_experiment(experiment_id)
+        if not exp:
+            return {"ok": False, "error": "not_found"}
+        template_id = store.save_template(
+            name=template_name,
+            description=description,
+            play_ids=exp.play_ids,
+            config=exp.config,
+            hypothesis_pattern=exp.hypothesis,
+            token_budget=exp.token_budget,
+            created_from=experiment_id,
+        )
+        return {"ok": True, "template_id": template_id}
+
+    async def _create_from_template(
+        template_id: str,
+        name: str,
+        overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        tmpl = store.get_template(template_id)
+        if not tmpl:
+            return {"ok": False, "error": "template_not_found"}
+        from .store import _json_or
+        play_ids = _json_or(tmpl.get("play_ids"), [])
+        config = _json_or(tmpl.get("config"), {})
+        hypothesis = tmpl.get("hypothesis_pattern")
+        budget = int(tmpl.get("token_budget") or 200_000)
+        if overrides:
+            play_ids = overrides.get("play_ids", play_ids)
+            config = {**config, **overrides.get("config", {})}
+            hypothesis = overrides.get("hypothesis", hypothesis)
+            budget = int(overrides.get("token_budget", budget))
+            if overrides.get("channel"):
+                config["channel"] = overrides["channel"]
+        exp = store.create_experiment(
+            name=name,
+            hypothesis=hypothesis,
+            play_ids=play_ids,
+            config=config,
+            token_budget=budget,
+        )
+        return {"ok": True, "experiment_id": exp.id, "phase": exp.phase}
+
+    # WS8D: Propose experiment.
+    async def _propose_experiment(
+        name: str,
+        rationale: str,
+        hypothesis: str | None = None,
+        play_ids: list[str] | None = None,
+        source_experiment_id: str | None = None,
+    ) -> dict[str, Any]:
+        prop_id = store.propose_experiment(
+            name=name,
+            hypothesis=hypothesis,
+            play_ids=play_ids,
+            rationale=rationale,
+            source_experiment_id=source_experiment_id,
+        )
+        return {"ok": True, "proposed_id": prop_id, "status": "pending"}
+
+    # WS8A: Quality evaluation tool.
+    async def _evaluate_quality(content: str) -> dict[str, Any]:
+        try:
+            from .quality_gate import evaluate_content
+            if runner:
+                primitives = runner.load_primitives_cached()
+                score = await evaluate_content(
+                    content,
+                    brand=primitives.brand,
+                    rules=primitives.rules,
+                    config=runner.config.llm,
+                )
+            else:
+                from ..config import load_config
+                cfg = load_config()
+                score = await evaluate_content(content, config=cfg.llm)
+            return {
+                "ok": True,
+                "overall": score.overall,
+                "passed": score.passed,
+                "brand_voice": score.brand_voice,
+                "clarity": score.clarity,
+                "relevance": score.relevance,
+                "rule_compliance": score.rule_compliance,
+                "learning_incorporation": score.learning_incorporation,
+                "feedback": score.feedback,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
     play_param = {
         "type": "array",
         "items": {"type": "string"}
@@ -404,5 +528,120 @@ def build_custom_tools(
             description="List the play IDs available for use in experiments.",
             parameters={"type": "object", "properties": {}},
             execute=_list_plays,
+        ),
+        # WS3B: Structured metrics tools.
+        Tool(
+            name="save_metric",
+            description=(
+                "Save a structured metric (reply_rate, open_rate, meeting_rate, etc.) "
+                "for an experiment. Use in the measure phase."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"},
+                    "metric_name": {"type": "string"},
+                    "metric_value": {"type": "number"},
+                    "variant": {
+                        "type": "string",
+                        "description": "A/B variant label (e.g. 'A', 'B', or null).",
+                    },
+                },
+                "required": ["experiment_id", "metric_name", "metric_value"],
+            },
+            execute=_save_metric,
+        ),
+        Tool(
+            name="compare_to_hypothesis",
+            description=(
+                "Compare experiment metrics to its hypothesis. "
+                "Returns pass/fail + reasoning."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"},
+                },
+                "required": ["experiment_id"],
+            },
+            execute=_compare_to_hypothesis,
+        ),
+        # WS3D: Experiment templates.
+        Tool(
+            name="save_as_template",
+            description="Save a successful experiment's config as a reusable template.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"},
+                    "template_name": {"type": "string"},
+                    "description": {"type": "string"},
+                },
+                "required": ["experiment_id", "template_name"],
+            },
+            execute=_save_as_template,
+        ),
+        Tool(
+            name="create_from_template",
+            description="Create a new experiment from a saved template with optional overrides.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "overrides": {
+                        "type": "object",
+                        "additionalProperties": True,
+                        "description": "Override fields: hypothesis, channel, play_ids, etc.",
+                    },
+                },
+                "required": ["template_id", "name"],
+            },
+            execute=_create_from_template,
+        ),
+        # WS8D: Autonomous experiment generation.
+        Tool(
+            name="propose_experiment",
+            description=(
+                "Propose a follow-up experiment for human review. Unlike create_experiment, "
+                "this goes into a pending queue and requires approval."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "hypothesis": {"type": "string"},
+                    "play_ids": play_param,
+                    "rationale": {
+                        "type": "string",
+                        "description": "Why this experiment should be run next.",
+                    },
+                    "source_experiment_id": {
+                        "type": "string",
+                        "description": "The experiment that inspired this proposal.",
+                    },
+                },
+                "required": ["name", "rationale"],
+            },
+            execute=_propose_experiment,
+        ),
+        # WS8A: Quality evaluation tool.
+        Tool(
+            name="evaluate_quality",
+            description=(
+                "Self-check content quality against brand voice, rules, and learnings. "
+                "Use during the build phase to catch issues early."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The content to evaluate.",
+                    },
+                },
+                "required": ["content"],
+            },
+            execute=_evaluate_quality,
         ),
     ]

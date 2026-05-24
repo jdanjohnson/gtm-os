@@ -97,6 +97,47 @@ def load_primitives(base_path: str | Path = "primitives") -> Primitives:
     return prim
 
 
+def parse_play_frontmatter(play_content: str) -> dict[str, Any]:
+    """Parse YAML frontmatter from a PLAY.md file (WS3E)."""
+    if not play_content.startswith("---"):
+        return {}
+    end = play_content.find("---", 3)
+    if end < 0:
+        return {}
+    fm_text = play_content[3:end].strip()
+    try:
+        loaded = yaml.safe_load(fm_text)
+        return loaded if isinstance(loaded, dict) else {}
+    except yaml.YAMLError:
+        return {}
+
+
+def get_play_tools_needed(base_path: str | Path) -> dict[str, list[str]]:
+    """Return {play_id: [tool_use_cases]} from play frontmatter (WS3E)."""
+    base = Path(base_path)
+    plays_dir = base / "plays"
+    result: dict[str, list[str]] = {}
+    if not plays_dir.exists():
+        return result
+    for sub in sorted(plays_dir.iterdir()):
+        if not sub.is_dir():
+            continue
+        play_file = sub / "PLAY.md"
+        if not play_file.exists():
+            continue
+        fm = parse_play_frontmatter(_read_text(play_file))
+        tools = fm.get("tools_needed", [])
+        if tools:
+            use_cases = []
+            for t in tools:
+                if isinstance(t, dict):
+                    use_cases.append(str(t.get("use_case", t)))
+                else:
+                    use_cases.append(str(t))
+            result[sub.name] = use_cases
+    return result
+
+
 def primitives_exist(base_path: str | Path) -> bool:
     base = Path(base_path)
     return (base / "agents").exists() or (base / "brand").exists()

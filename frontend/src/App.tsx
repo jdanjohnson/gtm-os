@@ -1,214 +1,320 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import {
-  LayoutDashboard,
-  FlaskConical,
-  BookOpen,
-  Brain,
-  Users,
-  Zap,
-  MessageSquare,
-  ChevronDown,
-  ChevronUp,
-  Activity,
-  Shield,
-} from "lucide-react";
 
+import Sidebar from "./components/Sidebar";
+import ExperimentTabs from "./components/ExperimentTabs";
+import StatusBar from "./components/StatusBar";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
-import ExperimentList from "./components/ExperimentList";
 import ExperimentDetail from "./components/ExperimentDetail";
 import PlaysLibrary from "./components/PlaysLibrary";
 import MemoryBrowser from "./components/MemoryBrowser";
 import AgentsView from "./components/AgentsView";
 import AutomationsView from "./components/AutomationsView";
-import { getHealth, getPrimitives, PrimitivesSummary } from "./lib/api";
+import RulesView from "./components/RulesView";
+import Settings from "./components/Settings";
+import {
+  Experiment,
+  getHealth,
+  getPrimitives,
+  listExperiments,
+  listMemory,
+  PrimitivesSummary,
+} from "./lib/api";
 
-type View = "dashboard" | "experiments" | "plays" | "memory" | "agents" | "automations";
-
-const NAV_ITEMS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "experiments", label: "Experiments", icon: FlaskConical },
-  { id: "plays", label: "Plays", icon: BookOpen },
-  { id: "memory", label: "Memory", icon: Brain },
-  { id: "agents", label: "Agents", icon: Users },
-  { id: "automations", label: "Automations", icon: Zap },
-];
+export type SidebarView =
+  | "dashboard"
+  | "experiments"
+  | "plays"
+  | "memory"
+  | "agents"
+  | "automations"
+  | "rules"
+  | "settings";
 
 export default function App() {
-  const [view, setView] = useState<View>("dashboard");
-  const [selectedExperiment, setSelectedExperiment] = useState<string | null>(null);
+  const [sidebarView, setSidebarView] = useState<SidebarView>("dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [primitives, setPrimitives] = useState<PrimitivesSummary | null>(null);
   const [health, setHealth] = useState<Awaited<ReturnType<typeof getHealth>> | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatAgent, setChatAgent] = useState("orchestrator");
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
+  const [memoryCount, setMemoryCount] = useState(0);
+  const [trustScores, setTrustScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     getHealth().then(setHealth).catch(() => null);
     getPrimitives().then(setPrimitives).catch(() => null);
+    listMemory().then((d) => setMemoryCount(d.memories.length)).catch(() => null);
   }, []);
 
-  function handleExperimentSelect(id: string | null) {
-    setSelectedExperiment(id);
-    setView("experiments");
-  }
+  // Periodically fetch experiments.
+  useEffect(() => {
+    function refresh() {
+      listExperiments()
+        .then(({ experiments: exps }) => setExperiments(exps))
+        .catch(() => null);
+    }
+    refresh();
+    const t = setInterval(refresh, 4000);
+    return () => clearInterval(t);
+  }, []);
 
-  const trustScore = 0.6;
+  // Fetch trust scores.
+  useEffect(() => {
+    fetch("/api/trust-scores")
+      .then((r) => r.json())
+      .then((d) => {
+        const map: Record<string, number> = {};
+        for (const ts of d.trust_scores || []) {
+          map[ts.experiment_type] = parseFloat(ts.score);
+        }
+        setTrustScores(map);
+      })
+      .catch(() => null);
+    const t = setInterval(() => {
+      fetch("/api/trust-scores")
+        .then((r) => r.json())
+        .then((d) => {
+          const map: Record<string, number> = {};
+          for (const ts of d.trust_scores || []) {
+            map[ts.experiment_type] = parseFloat(ts.score);
+          }
+          setTrustScores(map);
+        })
+        .catch(() => null);
+    }, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const experimentNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const e of experiments) map[e.id] = e.name;
+    return map;
+  }, [experiments]);
+
+  const experimentPhases = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const e of experiments) map[e.id] = e.phase;
+    return map;
+  }, [experiments]);
+
+  const avgTrust = useMemo(() => {
+    const vals = Object.values(trustScores);
+    if (vals.length === 0) return 0;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }, [trustScores]);
+
+  const activeExperiments = useMemo(
+    () => experiments.filter((e) => !["complete", "paused"].includes(e.phase)),
+    [experiments],
+  );
+
+  // Open experiment as tab.
+  const openExperimentTab = useCallback(
+    (id: string) => {
+      if (!openTabs.includes(id)) {
+        setOpenTabs((tabs) => [...tabs, id]);
+      }
+      setActiveTab(id);
+      setSidebarView("experiments");
+    },
+    [openTabs],
+  );
+
+  const closeTab = useCallback(
+    (id: string) => {
+      setOpenTabs((tabs) => tabs.filter((t) => t !== id));
+      if (activeTab === id) {
+        setActiveTab(null);
+      }
+    },
+    [activeTab],
+  );
+
+  // Determine what to show in the content area.
+  const renderContent = () => {
+    // If an experiment tab is active, show that experiment's detail.
+    if (activeTab) {
+      return (
+        <ExperimentDetail
+          experimentId={activeTab}
+          onClear={() => setActiveTab(null)}
+        />
+      );
+    }
+    switch (sidebarView) {
+      case "dashboard":
+        return (
+          <Dashboard
+            experiments={experiments}
+            activeExperiments={activeExperiments}
+            trustScores={trustScores}
+            avgTrust={avgTrust}
+            memoryCount={memoryCount}
+            onOpenExperiment={openExperimentTab}
+          />
+        );
+      case "experiments":
+        return (
+          <ExperimentListView
+            experiments={experiments}
+            onSelect={openExperimentTab}
+          />
+        );
+      case "plays":
+        return <PlaysLibrary primitives={primitives} />;
+      case "memory":
+        return <MemoryBrowser />;
+      case "agents":
+        return <AgentsView primitives={primitives} />;
+      case "automations":
+        return <AutomationsView />;
+      case "rules":
+        return <RulesView />;
+      case "settings":
+        return <Settings />;
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="flex h-full min-h-screen text-slate-100">
-      {/* ── Sidebar ────────────────────────────────── */}
-      <aside className="glass-sidebar flex w-60 shrink-0 flex-col">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
-            <Activity size={20} />
-          </div>
-          <div>
-            <span className="text-base font-semibold tracking-tight">GTM-OS</span>
-            <div className="text-[10px] text-slate-500">autonomous engine</div>
-          </div>
-        </div>
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0F0F0F] text-[#FAFAFA]">
+      {/* Top bar: experiment tabs */}
+      <ExperimentTabs
+        openTabs={openTabs}
+        activeTab={activeTab}
+        experimentNames={experimentNames}
+        experimentPhases={experimentPhases}
+        onSelectTab={setActiveTab}
+        onCloseTab={closeTab}
+        onNewExperiment={() => {
+          setActiveTab(null);
+          setSidebarView("dashboard");
+        }}
+        health={health}
+      />
 
-        {/* Trust Score */}
-        <div className="mx-4 mb-4 glass-card !rounded-xl px-3 py-2.5">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1.5 text-slate-400">
-              <Shield size={12} />
-              Trust Score
-            </span>
-            <span className="font-semibold text-emerald-400">{(trustScore * 100).toFixed(0)}%</span>
-          </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800/80">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all"
-              style={{ width: `${trustScore * 100}%` }}
-            />
-          </div>
-        </div>
+      {/* Main three-panel layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar */}
+        <Sidebar
+          activeView={sidebarView}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          onNavigate={(view) => {
+            setSidebarView(view);
+            setActiveTab(null);
+          }}
+          avgTrust={avgTrust}
+          experimentCount={activeExperiments.length}
+        />
 
-        {/* Nav items */}
-        <nav className="flex-1 px-3 space-y-0.5">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = view === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setView(item.id)}
-                className={clsx(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all",
-                  active
-                    ? "glass text-emerald-300 glow-emerald"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]",
-                )}
-              >
-                <Icon size={18} className={active ? "text-emerald-400" : ""} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
+        {/* Content area */}
+        <main className="flex-1 overflow-y-auto bg-[#0F0F0F]">
+          {renderContent()}
+        </main>
 
-        {/* Status pills */}
-        <div className="px-4 pb-4 space-y-2">
-          <div className="flex items-center gap-2 text-[11px] text-slate-500">
-            <span className={clsx(
-              "h-1.5 w-1.5 rounded-full",
-              health?.scheduler_running ? "bg-emerald-400 animate-pulse-glow" : "bg-slate-600"
-            )} />
-            scheduler: {health?.scheduler_running ? "running" : "stopped"}
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-slate-500">
-            <span className={clsx(
-              "h-1.5 w-1.5 rounded-full",
-              health?.composio_configured ? "bg-indigo-400" : "bg-slate-600"
-            )} />
-            composio: {health?.composio_configured ? "connected" : "off"}
-          </div>
-          <div className="glass-pill inline-block text-slate-400">
-            {health?.model ?? "loading..."}
-          </div>
-        </div>
-      </aside>
-
-      {/* ── Main Content ───────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <header className="glass-header flex items-center justify-between px-6 py-3">
-          <h1 className="text-sm font-medium text-slate-300">
-            {NAV_ITEMS.find((n) => n.id === view)?.label ?? "Dashboard"}
-          </h1>
+        {/* Right chat panel */}
+        {chatCollapsed ? (
           <button
-            onClick={() => setChatOpen((v) => !v)}
-            className={clsx(
-              "flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm transition-all",
-              chatOpen
-                ? "glass text-emerald-300"
-                : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]",
-            )}
+            onClick={() => setChatCollapsed(false)}
+            className="flex w-8 flex-col items-center justify-center border-l border-[#2A2A2A] bg-[#1A1A1A] text-xs text-[#A1A1AA] hover:text-white"
           >
-            <MessageSquare size={16} />
-            Chat
-            {chatOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            <span className="writing-vertical-lr rotate-180 whitespace-nowrap tracking-wider">
+              Chat
+            </span>
           </button>
-        </header>
-
-        {/* Content + Chat split */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Main view area */}
-          <main className={clsx(
-            "flex-1 overflow-y-auto transition-all",
-            chatOpen ? "" : "",
-          )}>
-            {view === "dashboard" && (
-              <Dashboard
-                onSelectExperiment={handleExperimentSelect}
-                primitives={primitives}
-                health={health}
-              />
-            )}
-            {view === "experiments" && (
-              <div className="flex h-full">
-                <div className="w-72 shrink-0 border-r border-white/[0.06]">
-                  <ExperimentList
-                    selectedId={selectedExperiment}
-                    onSelect={handleExperimentSelect}
-                    primitives={primitives}
-                  />
-                </div>
-                <div className="flex-1">
-                  <ExperimentDetail
-                    experimentId={selectedExperiment}
-                    onClear={() => setSelectedExperiment(null)}
-                  />
-                </div>
-              </div>
-            )}
-            {view === "plays" && <PlaysLibrary primitives={primitives} />}
-            {view === "memory" && <MemoryBrowser />}
-            {view === "agents" && <AgentsView primitives={primitives} onSwitchToChat={(agent) => {
-              setChatAgent(agent);
-              setChatOpen(true);
-            }} />}
-            {view === "automations" && <AutomationsView />}
-          </main>
-
-          {/* Persistent Chat Panel — always mounted, hidden via CSS to preserve state */}
-          <div
-            className="glass-chat-panel animate-fade-in"
-            style={{ height: chatOpen ? "340px" : "0px", minHeight: chatOpen ? "280px" : "0px", overflow: "hidden", transition: "height 0.2s ease, min-height 0.2s ease" }}
-          >
+        ) : (
+          <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-3 py-1.5">
+              <span className="text-xs font-medium text-[#A1A1AA]">Chat</span>
+              <button
+                onClick={() => setChatCollapsed(true)}
+                className="rounded p-1 text-[#A1A1AA] hover:bg-[#2A2A2A] hover:text-white"
+              >
+                <span className="text-xs">−</span>
+              </button>
+            </div>
             <Chat
-              experimentId={selectedExperiment}
+              experimentId={activeTab}
               primitives={primitives}
-              defaultAgent={chatAgent}
-              onAgentChange={setChatAgent}
-              compact
+              experimentNames={experimentNames}
+              onSwitchExperiment={(id) => {
+                if (id) openExperimentTab(id);
+                else setActiveTab(null);
+              }}
             />
-          </div>
-        </div>
+          </aside>
+        )}
       </div>
+
+      {/* Bottom status bar */}
+      <StatusBar
+        avgTrust={avgTrust}
+        activeExperimentCount={activeExperiments.length}
+        memoryCount={memoryCount}
+        model={health?.model}
+      />
     </div>
   );
+}
+
+// ─── Inline sub-views ────────────────────────────────────────────────────────
+
+function ExperimentListView({
+  experiments,
+  onSelect,
+}: {
+  experiments: Experiment[];
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="p-6">
+      <h1 className="mb-4 text-xl font-semibold">Experiments</h1>
+      {experiments.length === 0 ? (
+        <p className="text-sm text-[#A1A1AA]">No experiments yet. Create one from the dashboard or chat.</p>
+      ) : (
+        <div className="space-y-2">
+          {experiments.map((e) => (
+            <button
+              key={e.id}
+              onClick={() => onSelect(e.id)}
+              className="flex w-full items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-left hover:border-[#3A3A3A]"
+            >
+              <div>
+                <div className="font-medium">{e.name}</div>
+                <div className="mt-0.5 text-xs text-[#A1A1AA]">
+                  {e.hypothesis || "No hypothesis"}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className={phaseColor(e.phase)}>{e.phase}</span>
+                <span className="text-[#A1A1AA]">
+                  {e.tokens_used.toLocaleString()} / {e.token_budget.toLocaleString()}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function phaseColor(phase: string) {
+  const map: Record<string, string> = {
+    design: "text-yellow-400",
+    build: "text-blue-400",
+    execute: "text-green-400",
+    measure: "text-orange-400",
+    learn: "text-purple-400",
+    complete: "text-gray-400",
+    paused: "text-red-400",
+  };
+  return map[phase] ?? "text-gray-400";
 }

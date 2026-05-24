@@ -2,16 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
-import { Send, Square, ChevronDown, Bot, User, Wrench } from "lucide-react";
 
 import { PrimitivesSummary, streamChat } from "../lib/api";
 
 interface Props {
   experimentId: string | null;
   primitives: PrimitivesSummary | null;
-  defaultAgent?: string;
-  onAgentChange?: (agent: string) => void;
-  compact?: boolean;
+  experimentNames?: Record<string, string>;
+  onSwitchExperiment?: (id: string | null) => void;
 }
 
 interface UIMessage {
@@ -23,23 +21,81 @@ interface UIMessage {
   pending?: boolean;
 }
 
-export default function Chat({ experimentId, primitives, defaultAgent, onAgentChange, compact }: Props) {
+interface ChatSession {
+  messages: UIMessage[];
+  threadId: string | null;
+  agent: string;
+  unread: number;
+}
+
+const GENERAL_KEY = "__general__";
+
+function sessionKey(experimentId: string | null): string {
+  return experimentId ?? GENERAL_KEY;
+}
+
+function emptySession(): ChatSession {
+  return { messages: [], threadId: null, agent: "orchestrator", unread: 0 };
+}
+
+export default function Chat({
+  experimentId,
+  primitives,
+  experimentNames,
+  onSwitchExperiment,
+}: Props) {
+  const sessionsRef = useRef<Map<string, ChatSession>>(new Map());
+  const prevExpRef = useRef<string | null>(experimentId);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [agent, setAgent] = useState<string>(defaultAgent ?? "orchestrator");
+  const [agent, setAgent] = useState<string>("orchestrator");
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [, forceRender] = useState(0);
+
+  const saveCurrentSession = useCallback(() => {
+    const key = sessionKey(prevExpRef.current);
+    const current = sessionsRef.current.get(key) ?? emptySession();
+    sessionsRef.current.set(key, {
+      ...current,
+      messages,
+      threadId,
+      agent,
+    });
+  }, [messages, threadId, agent]);
 
   useEffect(() => {
-    if (defaultAgent) setAgent(defaultAgent);
-  }, [defaultAgent]);
+    if (prevExpRef.current === experimentId) return;
+    saveCurrentSession();
+    const key = sessionKey(experimentId);
+    const cached = sessionsRef.current.get(key);
+    if (cached) {
+      setMessages(cached.messages);
+      setThreadId(cached.threadId);
+      setAgent(cached.agent);
+      sessionsRef.current.set(key, { ...cached, unread: 0 });
+    } else {
+      setMessages([]);
+      setThreadId(null);
+      setAgent("orchestrator");
+    }
+    prevExpRef.current = experimentId;
+    forceRender((n) => n + 1);
+  }, [experimentId, saveCurrentSession]);
 
   useEffect(() => {
-    setThreadId(null);
-    setMessages([]);
-  }, [experimentId]);
+    const key = sessionKey(experimentId);
+    const current = sessionsRef.current.get(key) ?? emptySession();
+    sessionsRef.current.set(key, {
+      ...current,
+      messages,
+      threadId,
+      agent,
+      unread: current.unread,
+    });
+  }, [messages, threadId, agent, experimentId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -80,10 +136,7 @@ export default function Chat({ experimentId, primitives, defaultAgent, onAgentCh
         {
           onMeta: (meta) => {
             setThreadId(meta.thread_id);
-            if (meta.agent) {
-              setAgent(meta.agent);
-              onAgentChange?.(meta.agent);
-            }
+            if (meta.agent) setAgent(meta.agent);
           },
           onToken: (t) => {
             setMessages((curr) => {
@@ -120,7 +173,7 @@ export default function Chat({ experimentId, primitives, defaultAgent, onAgentCh
                     ...next[i],
                     content:
                       next[i].content +
-                      "\n\n-> " +
+                      "\n\n→ " +
                       JSON.stringify(result, null, 2).slice(0, 2000),
                     ok,
                     pending: false,
@@ -167,73 +220,135 @@ export default function Chat({ experimentId, primitives, defaultAgent, onAgentCh
         controller.signal,
       );
     } catch {
-      // handled in onError
+      // already handled in onError
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming, threadId, experimentId, agent, onAgentChange]);
+  }, [input, streaming, threadId, experimentId, agent]);
 
   const stop = () => {
     abortRef.current?.abort();
     setStreaming(false);
   };
 
+  const closeSession = (key: string) => {
+    sessionsRef.current.delete(key);
+    if (key === sessionKey(experimentId)) {
+      onSwitchExperiment?.(null);
+    }
+    forceRender((n) => n + 1);
+  };
+
+  const activeSessionKeys = Array.from(sessionsRef.current.keys());
+  const currentKey = sessionKey(experimentId);
+  if (!activeSessionKeys.includes(currentKey)) {
+    activeSessionKeys.unshift(currentKey);
+  }
+
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Agent bar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.06] text-[11px] text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <Bot size={12} className="text-emerald-400" />
-          <select
-            value={agent}
-            onChange={(e) => {
-              setAgent(e.target.value);
-              onAgentChange?.(e.target.value);
-            }}
-            className="glass-input !rounded-lg px-2 py-0.5 text-[11px] text-emerald-300 bg-transparent border-emerald-500/20"
-          >
-            {(primitives?.agents.length ? primitives.agents : ["orchestrator"]).map(
-              (a) => (
-                <option key={a} value={a}>{a}</option>
-              ),
-            )}
-          </select>
+      {/* Session tab strip */}
+      {activeSessionKeys.length > 0 && (
+        <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1">
+          {activeSessionKeys.map((key) => {
+            const isActive = key === currentKey;
+            const session = sessionsRef.current.get(key);
+            const unread = session?.unread ?? 0;
+            const isGeneral = key === GENERAL_KEY;
+            const expName = isGeneral
+              ? "General"
+              : experimentNames?.[key] ?? `${key.slice(0, 8)}…`;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (!isActive) {
+                    onSwitchExperiment?.(isGeneral ? null : key);
+                  }
+                }}
+                className={clsx(
+                  "group relative flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-all",
+                  isActive
+                    ? "bg-[#2A2A2A] text-white"
+                    : "text-[#A1A1AA] hover:bg-[#2A2A2A]/60 hover:text-white",
+                )}
+              >
+                <span className={clsx(
+                  "inline-block h-1.5 w-1.5 rounded-full",
+                  isGeneral ? "bg-blue-400" : "bg-emerald-400",
+                )} />
+                <span className="max-w-[120px] truncate">{expName}</span>
+                {unread > 0 && !isActive && (
+                  <span className="ml-0.5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+                    {unread}
+                  </span>
+                )}
+                {session && session.messages.length > 0 && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeSession(key);
+                    }}
+                    className="ml-0.5 hidden rounded p-0.5 text-[#A1A1AA] hover:bg-[#3A3A3A] hover:text-white group-hover:inline-block"
+                  >
+                    ✕
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <span className="text-slate-600">|</span>
-        <span>
-          {experimentId ? `exp: ${experimentId.slice(0, 8)}...` : "no experiment"}
-        </span>
-        {threadId && (
-          <>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-500">thread: {threadId.slice(0, 10)}...</span>
-          </>
+      )}
+
+      {/* Agent selector */}
+      <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-3 py-1.5 text-xs text-[#A1A1AA]">
+        <span>Agent:</span>
+        <select
+          value={agent}
+          onChange={(e) => setAgent(e.target.value)}
+          className="rounded bg-[#2A2A2A] px-2 py-1 text-white"
+        >
+          {(primitives?.agents.length ? primitives.agents : ["orchestrator"]).map(
+            (a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ),
+          )}
+        </select>
+        {experimentId && (
+          <span className="ml-auto text-[10px]">
+            exp: {experimentId.slice(0, 8)}…
+          </span>
         )}
       </div>
 
-      {/* Messages */}
+      {/* Messages area */}
       <div
         ref={scrollRef}
-        className={clsx("flex-1 overflow-y-auto px-4 py-4", compact && "px-4 py-3")}
+        className="flex-1 overflow-y-auto px-4 py-4"
       >
         {messages.length === 0 && (
-          <div className="glass-card mx-auto max-w-xl p-5 text-center">
-            <h2 className="mb-1.5 text-sm font-medium text-slate-200">
-              Talk to your GTM team
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-4 text-sm text-[#A1A1AA]">
+            <h2 className="mb-2 text-base font-semibold text-white">
+              Talk to your GTM team.
             </h2>
-            <p className="text-xs text-slate-400">
-              Describe what you want them to do: run experiments, draft sequences, search memory, or analyze results.
-            </p>
+            <p className="mb-2 text-xs">Examples:</p>
+            <ul className="ml-4 list-disc text-xs text-[#A1A1AA]">
+              <li>Find 20 e-commerce founders on Apollo and send my pitch.</li>
+              <li>Set up a weekly cold outbound experiment.</li>
+              <li>Search memory for what worked with dev tools.</li>
+            </ul>
           </div>
         )}
 
         {messages.map((m) => (
-          <Message key={m.id} m={m} compact={compact} />
+          <Message key={m.id} m={m} />
         ))}
       </div>
 
-      {/* Input */}
-      <div className="border-t border-white/[0.06] px-4 py-3">
+      {/* Input area */}
+      <div className="border-t border-[#2A2A2A] bg-[#1A1A1A] px-3 py-3">
         <div className="flex gap-2">
           <textarea
             value={input}
@@ -245,24 +360,24 @@ export default function Chat({ experimentId, primitives, defaultAgent, onAgentCh
               }
             }}
             placeholder="What should the team do next?"
-            rows={compact ? 1 : 2}
-            className="glass-input flex-1 resize-none px-3 py-2 text-sm text-slate-100"
+            rows={2}
+            className="flex-1 resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm outline-none placeholder-[#A1A1AA] focus:border-emerald-500"
             disabled={streaming}
           />
           {streaming ? (
             <button
               onClick={stop}
-              className="glass-btn-danger flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm"
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500"
             >
-              <Square size={14} />
+              Stop
             </button>
           ) : (
             <button
               onClick={send}
               disabled={!input.trim()}
-              className="glass-btn flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm disabled:opacity-30"
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-40"
             >
-              <Send size={14} />
+              Send
             </button>
           )}
         </div>
@@ -271,17 +386,16 @@ export default function Chat({ experimentId, primitives, defaultAgent, onAgentCh
   );
 }
 
-function Message({ m, compact }: { m: UIMessage; compact?: boolean }) {
+function Message({ m }: { m: UIMessage }) {
   if (m.role === "tool") {
     return (
-      <div className="mx-auto my-2 max-w-2xl glass-card !rounded-xl px-3 py-2 text-xs">
-        <div className="flex items-center gap-2 text-slate-400">
-          <Wrench size={10} />
+      <div className="my-2 rounded border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs text-[#A1A1AA]">
+        <div className="flex items-center justify-between">
           <span className="font-mono">
-            {m.pending ? "..." : m.ok ? "done" : "failed"} {m.tool_name}
+            {m.pending ? "→" : m.ok ? "✓" : "✗"} {m.tool_name}
           </span>
         </div>
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-slate-500">
+        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
           {m.content}
         </pre>
       </div>
@@ -290,47 +404,33 @@ function Message({ m, compact }: { m: UIMessage; compact?: boolean }) {
 
   if (m.role === "system") {
     return (
-      <div className="mx-auto my-2 max-w-2xl rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+      <div className="my-2 rounded border border-amber-900/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
         {m.content}
       </div>
     );
   }
 
-  const isUser = m.role === "user";
-
   return (
     <div
       className={clsx(
-        "mx-auto my-2 flex max-w-2xl",
-        isUser ? "justify-end" : "justify-start",
+        "my-2 flex",
+        m.role === "user" ? "justify-end" : "justify-start",
       )}
     >
-      <div className="flex items-start gap-2">
-        {!isUser && (
-          <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-            <Bot size={12} />
-          </div>
+      <div
+        className={clsx(
+          "max-w-[90%] rounded-xl px-3 py-2.5",
+          m.role === "user"
+            ? "bg-emerald-700/60 text-white"
+            : "bg-[#2A2A2A] text-[#FAFAFA]",
+          m.pending && "opacity-90",
         )}
-        <div
-          className={clsx(
-            "max-w-xl rounded-2xl px-4 py-2.5",
-            isUser
-              ? "glass border border-emerald-500/20 text-slate-100"
-              : "glass text-slate-200",
-            m.pending && "opacity-80",
-          )}
-        >
-          <div className="prose-chat">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {m.content || (m.pending ? "..." : "")}
-            </ReactMarkdown>
-          </div>
+      >
+        <div className="prose-chat">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {m.content || (m.pending ? "…" : "")}
+          </ReactMarkdown>
         </div>
-        {isUser && (
-          <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-700/50 text-slate-400">
-            <User size={12} />
-          </div>
-        )}
       </div>
     </div>
   );

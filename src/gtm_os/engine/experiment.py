@@ -323,14 +323,86 @@ class ExperimentRunner:
             if current and current.phase == exp.phase and exp.phase != "complete":
                 next_phase = _next_phase(exp.phase)
                 if exp.phase == "build":
-                    self.store.update_experiment(experiment_id, phase="paused")
-                    self.store.add_message(
-                        role="system",
-                        content="[APPROVAL REQUESTED] Build phase complete. Approve to start execute.",
-                        experiment_id=experiment_id,
-                    )
+                    # WS8A: Run quality gate before approving.
+                    content_to_check = result.message.content
+                    if content_to_check:
+                        try:
+                            from .quality_gate import evaluate_content
+
+                            qscore = await evaluate_content(
+                                content_to_check,
+                                brand=primitives.brand,
+                                rules=primitives.rules,
+                                past_learnings=memories,
+                                config=self.config.llm,
+                            )
+                            if not qscore.passed:
+                                self.store.add_message(
+                                    role="system",
+                                    content=(
+                                        f"[QUALITY GATE FAILED] Score: {qscore.overall:.1f}/10. "
+                                        f"Feedback: {qscore.feedback}. Returning to build."
+                                    ),
+                                    experiment_id=experiment_id,
+                                )
+                                return RunOutcome(
+                                    run_id=run.id,
+                                    experiment_id=experiment_id,
+                                    phase=exp.phase,
+                                    ok=True,
+                                    tokens_used=result.tokens_used,
+                                    message=(
+                                        f"Quality gate failed ({qscore.overall:.1f}/10): "
+                                        f"{qscore.feedback}"
+                                    ),
+                                    tool_calls=tools_used,
+                                )
+                        except Exception:
+                            logger.exception("quality gate eval failed (non-fatal)")
+
+                    # WS8C: Check progressive autonomy — auto-approve if trust is high.
+                    exp_type = exp.config.get("channel", "general")
+                    trust = self.store.get_trust_score(exp_type)
+                    trust_val = float(trust["score"]) if trust else 0.0
+                    if trust_val >= 0.8:
+                        logger.info(
+                            "auto-approving experiment %s (trust=%.2f)",
+                            experiment_id, trust_val,
+                        )
+                        self.store.update_experiment(experiment_id, phase="execute")
+                        self.store.add_message(
+                            role="system",
+                            content=(
+                                f"[AUTO-APPROVED] Trust score {trust_val:.2f} ≥ 0.80. "
+                                "Proceeding to execute."
+                            ),
+                            experiment_id=experiment_id,
+                        )
+                    else:
+                        self.store.update_experiment(experiment_id, phase="paused")
+                        self.store.add_message(
+                            role="system",
+                            content=(
+                                "[APPROVAL REQUESTED] Build phase complete. "
+                                "Approve to start execute."
+                            ),
+                            experiment_id=experiment_id,
+                        )
                 elif next_phase:
                     self.store.update_experiment(experiment_id, phase=next_phase)
+
+        # WS8C: Update trust score on experiment completion.
+        if result.finished and exp.phase in ("complete", "learn"):
+            try:
+                exp_type = exp.config.get("channel", "general")
+                self.store.upsert_trust_score(
+                    exp_type,
+                    score_delta=0.05 if result.error is None else -0.1,
+                    ran=True,
+                    succeeded=result.error is None,
+                )
+            except Exception:
+                logger.debug("trust score update failed (non-fatal)")
 
         return RunOutcome(
             run_id=run.id,
@@ -395,15 +467,18 @@ def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None 
     if phase == "measure":
         return (
             f"{base} Gather results. Check open rates, reply rates, leads generated, "
-            "or whatever KPIs the hypothesis defined. Save facts to memory. "
+            "or whatever KPIs the hypothesis defined. Use save_metric to record "
+            "structured metrics (reply_rate, open_rate, etc.) and save facts to memory. "
             "When measurement is complete, transition to 'learn'."
             f"{play_context}"
         )
     if phase == "learn":
         return (
             f"{base} Analyze the results. What worked? What didn't? "
+            "Use compare_to_hypothesis to evaluate against the original hypothesis. "
             "Save learnings to memory (type='learning'). Identify corrections — "
             "things we should always/never do going forward. "
+            "Consider proposing follow-up experiments with propose_experiment. "
             "When learning is complete, transition to 'complete'."
             f"{play_context}"
         )

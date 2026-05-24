@@ -1,321 +1,224 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import {
-  FlaskConical,
-  Brain,
-  BookOpen,
-  TrendingUp,
-  TrendingDown,
-  ArrowRight,
-  Clock,
-  Pause,
-  Play,
-  Zap,
-  Lightbulb,
-  Target,
-  BarChart3,
-} from "lucide-react";
-
-import {
-  Experiment,
-  MemoryItem,
-  PrimitivesSummary,
-  listExperiments,
-  listMemory,
-} from "../lib/api";
+import type { Experiment } from "../lib/api";
 
 interface Props {
-  onSelectExperiment: (id: string) => void;
-  primitives: PrimitivesSummary | null;
-  health: { ok: boolean; version: string; model: string; scheduler_running: boolean; composio_configured: boolean; primitives_dir: string } | null;
+  experiments: Experiment[];
+  activeExperiments: Experiment[];
+  trustScores: Record<string, number>;
+  avgTrust: number;
+  memoryCount: number;
+  onOpenExperiment: (id: string) => void;
 }
 
-const PHASE_CONFIG: Record<string, { label: string; class: string }> = {
-  design: { label: "Design", class: "phase-design" },
-  build: { label: "Build", class: "phase-build" },
-  execute: { label: "Execute", class: "phase-execute" },
-  measure: { label: "Measure", class: "phase-measure" },
-  learn: { label: "Learn", class: "phase-learn" },
-  complete: { label: "Complete", class: "phase-complete" },
-  paused: { label: "Paused", class: "phase-paused" },
+interface ProposedExperiment {
+  id: string;
+  name: string;
+  hypothesis?: string;
+  rationale?: string;
+  status: string;
+}
+
+const PHASE_DOTS: Record<string, string> = {
+  design: "bg-yellow-400",
+  build: "bg-blue-400",
+  execute: "bg-green-400",
+  measure: "bg-orange-400",
+  learn: "bg-purple-400",
+  complete: "bg-gray-400",
+  paused: "bg-red-400",
 };
 
-export default function Dashboard({ onSelectExperiment, primitives, health }: Props) {
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [memories, setMemories] = useState<MemoryItem[]>([]);
+export default function Dashboard({
+  experiments,
+  activeExperiments,
+  trustScores,
+  avgTrust,
+  memoryCount,
+  onOpenExperiment,
+}: Props) {
+  const [proposals, setProposals] = useState<ProposedExperiment[]>([]);
 
   useEffect(() => {
-    listExperiments().then(({ experiments }) => setExperiments(experiments)).catch(() => null);
-    listMemory().then(({ memories }) => setMemories(memories)).catch(() => null);
-    const t = setInterval(() => {
-      listExperiments().then(({ experiments }) => setExperiments(experiments)).catch(() => null);
-    }, 5000);
-    return () => clearInterval(t);
+    fetch("/api/proposed-experiments?status=pending")
+      .then((r) => r.json())
+      .then((d) => setProposals(d.proposals || []))
+      .catch(() => null);
   }, []);
 
-  const active = experiments.filter((e) => e.phase !== "complete" && e.phase !== "paused");
-  const completed = experiments.filter((e) => e.phase === "complete");
-  const paused = experiments.filter((e) => e.phase === "paused");
-  const learnings = memories.filter((m) => m.type === "learning");
-  const recentLearnings = learnings.slice(0, 5);
-  const totalTokens = experiments.reduce((s, e) => s + e.tokens_used, 0);
+  const handleApprove = async (id: string) => {
+    await fetch(`/api/proposed-experiments/${id}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+    setProposals((p) => p.filter((x) => x.id !== id));
+  };
+
+  const handleDismiss = async (id: string) => {
+    await fetch(`/api/proposed-experiments/${id}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject" }),
+    });
+    setProposals((p) => p.filter((x) => x.id !== id));
+  };
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard
-          icon={<FlaskConical size={18} />}
-          label="Active Experiments"
-          value={active.length}
-          accent="emerald"
-        />
-        <StatCard
-          icon={<Lightbulb size={18} />}
-          label="Learnings"
-          value={learnings.length}
-          accent="purple"
-        />
-        <StatCard
-          icon={<Brain size={18} />}
-          label="Memories"
-          value={memories.length}
-          accent="indigo"
-        />
-        <StatCard
-          icon={<BarChart3 size={18} />}
-          label="Tokens Used"
-          value={totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}
-          accent="amber"
-        />
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold">Good morning</h1>
+        <p className="mt-1 text-sm text-[#A1A1AA]">
+          {activeExperiments.length} experiment{activeExperiments.length !== 1 ? "s" : ""} running
+          {avgTrust > 0 ? ` · Trust trending ${avgTrust >= 0.5 ? "up" : "steady"}` : ""}
+        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        {/* Active Experiments */}
-        <div className="col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-slate-300 flex items-center gap-2">
-              <Target size={16} className="text-emerald-400" />
-              Active Experiments
-            </h2>
-            <span className="text-xs text-slate-500">{active.length} running</span>
+      {/* Active Experiments */}
+      <section className="mb-6">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#A1A1AA]">
+          Active Experiments
+        </h2>
+        {activeExperiments.length === 0 ? (
+          <p className="text-sm text-[#A1A1AA]">No active experiments. Start one from the chat.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {activeExperiments.map((e) => {
+              const trust = trustScores[e.config?.channel as string] ?? 0;
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => onOpenExperiment(e.id)}
+                  className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 text-left hover:border-[#3A3A3A] transition-colors"
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-medium text-sm">{e.name}</span>
+                    <span className={clsx("h-2.5 w-2.5 rounded-full", PHASE_DOTS[e.phase])} />
+                  </div>
+                  {e.hypothesis && (
+                    <p className="mb-2 text-xs text-[#A1A1AA] line-clamp-2">{e.hypothesis}</p>
+                  )}
+                  <div className="flex items-center justify-between text-[11px] text-[#A1A1AA]">
+                    <span className={phaseTextColor(e.phase)}>{e.phase}</span>
+                    <span>Trust {trust.toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2 text-[10px] text-[#A1A1AA]">
+                    {e.tokens_used.toLocaleString()} / {e.token_budget.toLocaleString()} tokens
+                  </div>
+                </button>
+              );
+            })}
           </div>
+        )}
+      </section>
 
-          {active.length === 0 && (
-            <div className="glass-card p-8 text-center">
-              <FlaskConical size={32} className="mx-auto mb-3 text-slate-600" />
-              <p className="text-sm text-slate-400">No active experiments yet.</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Open the chat and describe what you want to test.
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {active.map((exp) => (
-              <ExperimentCard
-                key={exp.id}
-                experiment={exp}
-                onClick={() => onSelectExperiment(exp.id)}
-              />
-            ))}
-          </div>
-
-          {paused.length > 0 && (
-            <>
-              <h3 className="text-xs font-medium text-slate-500 flex items-center gap-2 mt-6">
-                <Pause size={12} /> Paused ({paused.length})
-              </h3>
-              <div className="space-y-3">
-                {paused.map((exp) => (
-                  <ExperimentCard
-                    key={exp.id}
-                    experiment={exp}
-                    onClick={() => onSelectExperiment(exp.id)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
-          {completed.length > 0 && (
-            <>
-              <h3 className="text-xs font-medium text-slate-500 flex items-center gap-2 mt-6">
-                <Play size={12} /> Completed ({completed.length})
-              </h3>
-              <div className="space-y-3">
-                {completed.slice(0, 3).map((exp) => (
-                  <ExperimentCard
-                    key={exp.id}
-                    experiment={exp}
-                    onClick={() => onSelectExperiment(exp.id)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Right column */}
-        <div className="space-y-6">
-          {/* System Health */}
-          <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <Zap size={12} className="text-amber-400" />
-              System Health
-            </h3>
-            <div className="space-y-2">
-              <HealthRow
-                label="Scheduler"
-                ok={health?.scheduler_running ?? false}
-              />
-              <HealthRow
-                label="Composio"
-                ok={health?.composio_configured ?? false}
-              />
-              <HealthRow
-                label="LLM"
-                ok={!!health?.model}
-                value={health?.model}
-              />
-            </div>
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              <span className="glass-pill text-slate-400">
-                {primitives?.plays.length ?? 0} plays
-              </span>
-              <span className="glass-pill text-slate-400">
-                {primitives?.agents.length ?? 0} agents
-              </span>
-              <span className="glass-pill text-slate-400">
-                {memories.length} memories
-              </span>
-            </div>
-          </div>
-
-          {/* Recent Learnings */}
-          <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <Lightbulb size={12} className="text-purple-400" />
-              Recent Learnings
-            </h3>
-            {recentLearnings.length === 0 ? (
-              <p className="text-xs text-slate-500">
-                No learnings yet. Run experiments to generate insights.
-              </p>
+      {/* Two-column: Learnings + Proposed */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Recent completed experiments (stand-in for learnings) */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#A1A1AA]">
+            Recent Experiments
+          </h2>
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            {experiments.filter((e) => e.phase === "complete").length === 0 ? (
+              <p className="text-xs text-[#A1A1AA]">No completed experiments yet.</p>
             ) : (
-              <ul className="space-y-2">
-                {recentLearnings.map((l) => (
-                  <li key={l.id} className="text-xs text-slate-300 border-l-2 border-purple-500/30 pl-3 py-1">
-                    {l.content.length > 120 ? l.content.slice(0, 120) + "..." : l.content}
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      confidence: {l.confidence.toFixed(2)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-3">
+                {experiments
+                  .filter((e) => e.phase === "complete")
+                  .slice(0, 5)
+                  .map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => onOpenExperiment(e.id)}
+                      className="block w-full text-left"
+                    >
+                      <div className="text-sm">{e.name}</div>
+                      <div className="text-[11px] text-[#A1A1AA]">Completed</div>
+                    </button>
+                  ))}
+              </div>
             )}
           </div>
+        </section>
 
-          {/* Quick Actions */}
-          <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <BookOpen size={12} className="text-sky-400" />
-              Available Plays
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {(primitives?.plays ?? []).slice(0, 8).map((p) => (
-                <span key={p} className="glass-pill text-sky-300">{p}</span>
-              ))}
-            </div>
+        {/* Proposed Experiments */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#A1A1AA]">
+            Proposed Experiments
+          </h2>
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            {proposals.length === 0 ? (
+              <p className="text-xs text-[#A1A1AA]">No pending proposals.</p>
+            ) : (
+              <div className="space-y-3">
+                {proposals.map((p) => (
+                  <div key={p.id} className="rounded-lg border border-[#2A2A2A] p-3">
+                    <div className="mb-1 text-sm font-medium">{p.name}</div>
+                    {p.hypothesis && (
+                      <p className="mb-2 text-xs text-[#A1A1AA]">{p.hypothesis}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApprove(p.id)}
+                        className="rounded bg-emerald-600 px-2.5 py-1 text-xs hover:bg-emerald-500"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleDismiss(p.id)}
+                        className="rounded bg-[#2A2A2A] px-2.5 py-1 text-xs text-[#A1A1AA] hover:bg-[#3A3A3A]"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        </section>
       </div>
+
+      {/* Trust + Stats row */}
+      <section className="mt-6">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#A1A1AA]">
+          System Overview
+        </h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Avg Trust" value={avgTrust.toFixed(2)} sub={avgTrust >= 0.7 ? "Autonomous" : avgTrust >= 0.3 ? "Semi-auto" : "Manual"} />
+          <StatCard label="Experiments" value={String(experiments.length)} sub={`${activeExperiments.length} active`} />
+          <StatCard label="Memories" value={String(memoryCount)} sub="knowledge items" />
+          <StatCard
+            label="Trust Scores"
+            value={String(Object.keys(trustScores).length)}
+            sub="experiment types tracked"
+          />
+        </div>
+      </section>
     </div>
   );
 }
 
-function StatCard({ icon, label, value, accent }: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  accent: "emerald" | "purple" | "indigo" | "amber";
-}) {
-  const accentColors = {
-    emerald: "text-emerald-400 glow-emerald",
-    purple: "text-purple-400 glow-purple",
-    indigo: "text-indigo-400 glow-indigo",
-    amber: "text-amber-400 glow-amber",
+function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+      <div className="text-xs text-[#A1A1AA]">{label}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      <div className="mt-0.5 text-[11px] text-[#A1A1AA]">{sub}</div>
+    </div>
+  );
+}
+
+function phaseTextColor(phase: string): string {
+  const map: Record<string, string> = {
+    design: "text-yellow-400",
+    build: "text-blue-400",
+    execute: "text-green-400",
+    measure: "text-orange-400",
+    learn: "text-purple-400",
+    complete: "text-gray-400",
+    paused: "text-red-400",
   };
-  return (
-    <div className="glass-card p-4">
-      <div className={clsx("mb-2", accentColors[accent])}>
-        {icon}
-      </div>
-      <div className="text-2xl font-semibold text-slate-100">{value}</div>
-      <div className="text-[11px] text-slate-500 mt-0.5">{label}</div>
-    </div>
-  );
-}
-
-function ExperimentCard({ experiment: exp, onClick }: { experiment: Experiment; onClick: () => void }) {
-  const phase = PHASE_CONFIG[exp.phase] ?? PHASE_CONFIG.design;
-  const pct = exp.token_budget > 0 ? Math.min(100, (exp.tokens_used / exp.token_budget) * 100) : 0;
-
-  return (
-    <button
-      onClick={onClick}
-      className="glass-card w-full p-4 text-left group"
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-medium text-slate-100 truncate">{exp.name}</h3>
-            <span className={clsx("glass-pill border", phase.class)}>
-              {phase.label}
-            </span>
-          </div>
-          {exp.hypothesis && (
-            <p className="text-xs text-slate-400 mt-1.5 line-clamp-2">{exp.hypothesis}</p>
-          )}
-        </div>
-        <ArrowRight size={16} className="text-slate-600 group-hover:text-emerald-400 transition-colors shrink-0 ml-3 mt-1" />
-      </div>
-
-      <div className="flex items-center gap-4 mt-3">
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <BookOpen size={12} />
-          {exp.play_ids.join(", ") || "no play"}
-        </div>
-        <div className="flex-1">
-          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-800/80">
-            <div
-              className={clsx(
-                "h-full rounded-full transition-all",
-                pct > 80 ? "bg-rose-500" : "bg-emerald-500/60",
-              )}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
-        <span className="text-[10px] text-slate-500 shrink-0">
-          {exp.tokens_used.toLocaleString()} tok
-        </span>
-      </div>
-    </button>
-  );
-}
-
-function HealthRow({ label, ok, value }: { label: string; ok: boolean; value?: string }) {
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-slate-400">{label}</span>
-      <div className="flex items-center gap-2">
-        {value && <span className="text-slate-500 truncate max-w-[120px]">{value}</span>}
-        <span className={clsx(
-          "h-2 w-2 rounded-full",
-          ok ? "bg-emerald-400" : "bg-slate-600"
-        )} />
-      </div>
-    </div>
-  );
+  return map[phase] ?? "text-gray-400";
 }
