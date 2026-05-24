@@ -16,11 +16,13 @@ from ..config import Config, load_config
 from ..engine.composio_tools import ComposioIntegration
 from ..engine.experiment import ExperimentRunner
 from ..engine.memory import VectorMemory
+from ..engine.pipedream_tools import PipedreamIntegration
 from ..engine.scheduler import Scheduler
 from ..engine.store import Store
 from .routes import brand as brand_route
 from .routes import chat as chat_route
 from .routes import experiments as experiments_route
+from .routes import integrations as integrations_route
 from .routes import memory as memory_route
 from .routes import metrics as metrics_route
 from .routes import templates as templates_route
@@ -36,6 +38,7 @@ class AppState:
     store: Store
     memory: VectorMemory
     composio: ComposioIntegration
+    pipedream: PipedreamIntegration
     runner: ExperimentRunner
     scheduler: Scheduler | None
 
@@ -47,8 +50,12 @@ def create_app(config: Config | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         store = Store(cfg.db_path)
         composio = ComposioIntegration(cfg.composio_api_key)
+        pipedream = PipedreamIntegration(cfg.pipedream_api_key)
         memory = VectorMemory(store, cfg.llm)
-        runner = ExperimentRunner(config=cfg, store=store, memory=memory, composio=composio)
+        runner = ExperimentRunner(
+            config=cfg, store=store, memory=memory,
+            composio=composio, pipedream=pipedream,
+        )
         scheduler: Scheduler | None = None
         if cfg.scheduler.enabled:
             scheduler = Scheduler(config=cfg, store=store, runner=runner)
@@ -59,6 +66,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         app.state.gtm.store = store
         app.state.gtm.memory = memory
         app.state.gtm.composio = composio
+        app.state.gtm.pipedream = pipedream
         app.state.gtm.runner = runner
         app.state.gtm.scheduler = scheduler
 
@@ -90,11 +98,13 @@ def create_app(config: Config | None = None) -> FastAPI:
             "model": gtm.config.llm.model,
             "scheduler_running": bool(gtm.scheduler and gtm.scheduler.running),
             "composio_configured": gtm.composio.configured,
+            "pipedream_configured": gtm.pipedream.configured,
             "primitives_dir": str(gtm.config.primitives_dir),
         }
 
     app.include_router(brand_route.router, prefix="/api")
     app.include_router(chat_route.router, prefix="/api")
+    app.include_router(integrations_route.router, prefix="/api")
     app.include_router(experiments_route.router, prefix="/api")
     app.include_router(memory_route.router, prefix="/api")
     app.include_router(metrics_route.router, prefix="/api")

@@ -12,6 +12,7 @@ import MemoryBrowser from "./components/MemoryBrowser";
 import AgentsView from "./components/AgentsView";
 import AutomationsView from "./components/AutomationsView";
 import RulesView from "./components/RulesView";
+import IntegrationsView from "./components/IntegrationsView";
 import Settings from "./components/Settings";
 import {
   Experiment,
@@ -30,6 +31,7 @@ export type SidebarView =
   | "agents"
   | "automations"
   | "rules"
+  | "integrations"
   | "settings";
 
 export default function App() {
@@ -174,6 +176,8 @@ export default function App() {
         return <AutomationsView />;
       case "rules":
         return <RulesView />;
+      case "integrations":
+        return <IntegrationsView />;
       case "settings":
         return <Settings />;
       default:
