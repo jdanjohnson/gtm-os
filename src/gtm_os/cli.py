@@ -247,18 +247,33 @@ def setup():
 
     # Step 1: LLM provider
     console.print("[bold]1. LLM Provider[/bold]")
-    console.print("   Options: openai, anthropic, ollama (local)")
-    provider = typer.prompt("   Provider", default="openai")
+    console.print("   Options: claude (uses Claude Code login — no API key needed)")
+    console.print("            openai, anthropic (API key), ollama (local)")
+    provider = typer.prompt("   Provider", default="claude")
     model_defaults = {
+        "claude": "anthropic_oauth/claude-sonnet-4-20250514",
         "openai": "openai/gpt-4o-mini",
-        "anthropic": "anthropic/claude-3-5-sonnet-20241022",
+        "anthropic": "anthropic/claude-sonnet-4-20250514",
         "ollama": "ollama/llama3.1",
     }
     model = typer.prompt("   Model", default=model_defaults.get(provider, "openai/gpt-4o-mini"))
 
-    # Step 2: API key
+    # Step 2: API key (skip for claude/ollama — they don't need one)
     api_key_env = ""
-    if provider != "ollama":
+    if provider == "claude":
+        from .engine.anthropic_oauth import credentials_path
+
+        creds_path = credentials_path()
+        if creds_path:
+            console.print("\n[bold]2. Claude Code Auth[/bold]")
+            console.print(f"   [green]✓ Found credentials at {creds_path}[/green]")
+            console.print("   No API key needed — using your Claude subscription.")
+        else:
+            console.print("\n[bold]2. Claude Code Auth[/bold]")
+            console.print("   [yellow]⚠ No Claude credentials found.[/yellow]")
+            console.print("   Run `claude login` in another terminal first, then re-run setup.")
+            console.print("   (Install Claude Code: npm install -g @anthropic-ai/claude-code)")
+    elif provider not in ("ollama",):
         console.print("\n[bold]2. API Key[/bold]")
         env_var = "OPENAI_API_KEY" if provider == "openai" else "ANTHROPIC_API_KEY"
         console.print(f"   Set {env_var} in your environment (or enter it now).")
@@ -295,12 +310,13 @@ def setup():
     cfg_path = target / "gtm-os.config.yaml"
     import yaml
 
+    embedding_model = "" if provider == "claude" else "openai/text-embedding-3-small"
     config_data = {
         "primitives_dir": "./primitives",
         "data_dir": "./data",
         "llm": {
             "model": model,
-            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_model": embedding_model,
             "temperature": 0.4,
             "max_tokens": 4096,
         },
