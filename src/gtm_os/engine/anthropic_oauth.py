@@ -421,9 +421,13 @@ async def oauth_stream(
     temperature: float | None,
     max_tokens: int,
     timeout: int = 120,
+    max_retries: int = 5,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Stream completion. Yields {"type": "token", "text": "..."} for each delta and a
-    final {"type": "final", "message": {...}} matching the non-streaming shape."""
+    final {"type": "final", "message": {...}} matching the non-streaming shape.
+    Retries on 429/529 with exponential backoff."""
+    import asyncio
+
     creds = await get_valid_token()
     if creds is None:
         raise RuntimeError(
@@ -441,25 +445,45 @@ async def oauth_stream(
         stream=True,
     )
 
+    # Retry loop for rate limits before entering the stream.
+    resp_ctx = None
+    client = None
+    for attempt in range(max_retries + 1):
+        client = httpx.AsyncClient(timeout=timeout)
+        resp_ctx = client.stream(
+            "POST",
+            ANTHROPIC_API_MESSAGES_URL,
+            headers=_headers(creds.access_token),
+            json=payload,
+        )
+        resp = await resp_ctx.__aenter__()
+        if resp.status_code == 200:
+            break
+        if resp.status_code in (429, 529) and attempt < max_retries:
+            retry_after = resp.headers.get("retry-after")
+            wait = float(retry_after) if retry_after else min(2 ** attempt * 2, 60)
+            await resp_ctx.__aexit__(None, None, None)
+            await client.aclose()
+            await asyncio.sleep(wait)
+            continue
+        body = (await resp.aread()).decode("utf-8", "replace")
+        await resp_ctx.__aexit__(None, None, None)
+        await client.aclose()
+        raise RuntimeError(f"Anthropic OAuth stream failed ({resp.status_code}): {body[:500]}")
+    else:
+        if client:
+            await client.aclose()
+        raise RuntimeError(
+            f"Anthropic OAuth stream rate limited after {max_retries} retries"
+        )
+
     text_buf: list[str] = []
     current_tool: dict[str, Any] | None = None
     tool_calls: list[dict[str, Any]] = []
     input_tokens = 0
     output_tokens = 0
 
-    async with (
-        httpx.AsyncClient(timeout=timeout) as client,
-        client.stream(
-            "POST",
-            ANTHROPIC_API_MESSAGES_URL,
-            headers=_headers(creds.access_token),
-            json=payload,
-        ) as resp,
-    ):
-        if resp.status_code != 200:
-            body = (await resp.aread()).decode("utf-8", "replace")
-            raise RuntimeError(f"Anthropic OAuth stream failed ({resp.status_code}): {body[:500]}")
-
+    try:
         current_event: str | None = None
         async for line in resp.aiter_lines():
             if not line:
@@ -510,6 +534,11 @@ async def oauth_stream(
                 msg = evt.get("message") or {}
                 usage = msg.get("usage") or {}
                 input_tokens = usage.get("input_tokens", input_tokens)
+    finally:
+        if resp_ctx:
+            await resp_ctx.__aexit__(None, None, None)
+        if client:
+            await client.aclose()
 
     yield {
         "type": "final",
