@@ -18,6 +18,7 @@ const NAV_ITEMS: { view: SidebarView; icon: string; label: string }[] = [
   { view: "agents", icon: "🤖", label: "Agents" },
   { view: "automations", icon: "⏰", label: "Automations" },
   { view: "rules", icon: "📏", label: "Rules" },
+  { view: "integrations", icon: "🔌", label: "Integrations" },
 ];
 
 function trustColor(score: number): string {

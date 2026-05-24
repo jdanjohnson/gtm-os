@@ -77,6 +77,7 @@ class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     budgets: BudgetConfig = field(default_factory=BudgetConfig)
     composio_api_key: str | None = None
+    pipedream_api_key: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -153,12 +154,10 @@ def load_config(config_path: Path | None = None) -> Config:
         context_hard_clear_ratio=float(budgets_raw.get("context_hard_clear_ratio", 0.50)),
     )
 
-    composio_key = (
-        merged.get("api_keys", {}).get("composio")
-        if isinstance(merged.get("api_keys"), dict)
-        else None
-    )
-    composio_key = composio_key or os.environ.get("COMPOSIO_API_KEY")
+    api_keys_raw = merged.get("api_keys", {}) if isinstance(merged.get("api_keys"), dict) else {}
+
+    composio_key = api_keys_raw.get("composio") or os.environ.get("COMPOSIO_API_KEY")
+    pipedream_key = api_keys_raw.get("pipedream") or os.environ.get("PIPEDREAM_API_KEY")
 
     return Config(
         project_root=root,
@@ -170,6 +169,7 @@ def load_config(config_path: Path | None = None) -> Config:
         llm=llm,
         budgets=budgets,
         composio_api_key=composio_key,
+        pipedream_api_key=pipedream_key,
         raw=merged,
     )
 

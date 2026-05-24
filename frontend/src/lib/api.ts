@@ -94,6 +94,7 @@ export async function getHealth() {
     model: string;
     scheduler_running: boolean;
     composio_configured: boolean;
+    pipedream_configured: boolean;
     primitives_dir: string;
   }>("/api/health");
 }
@@ -207,6 +208,90 @@ export async function updateBrand(body: Omit<BrandIdentity, "brand_body">) {
 export async function getThreadMessages(threadId: string) {
   return json<{ thread_id: string; messages: ThreadMessage[] }>(
     `/api/threads/${threadId}/messages`,
+  );
+}
+
+export interface Integration {
+  name: string;
+  label: string;
+  configured: boolean;
+  masked_key: string;
+  has_env_key: boolean;
+  env_var: string;
+  docs_url: string;
+  dashboard_url: string;
+  description: string;
+}
+
+export async function getIntegrations() {
+  return json<{ integrations: Integration[] }>("/api/integrations");
+}
+
+export async function updateIntegrationKeys(keys: {
+  composio_api_key?: string;
+  pipedream_api_key?: string;
+}) {
+  return json<{ ok: boolean; updated: string[] }>("/api/integrations/keys", {
+    method: "PUT",
+    body: JSON.stringify(keys),
+  });
+}
+
+// --- App catalog & connections (Composio) ---
+
+export interface AppInfo {
+  slug: string;
+  name: string;
+  description: string;
+  logo: string;
+  categories: string[];
+  auth_schemes: string[];
+}
+
+export interface Connection {
+  id: string;
+  toolkit_slug: string;
+  toolkit_name: string;
+  toolkit_logo: string;
+  status: string;
+  created_at: string;
+  user_id: string;
+}
+
+export async function listApps(search = "", category = "", limit = 50) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (category) params.set("category", category);
+  params.set("limit", String(limit));
+  return json<{ apps: AppInfo[]; error?: string }>(
+    `/api/integrations/apps?${params}`,
+  );
+}
+
+export async function listConnections() {
+  return json<{ connections: Connection[]; error?: string }>(
+    "/api/integrations/connections",
+  );
+}
+
+export async function initiateConnect(toolkit_slug: string, redirect_url?: string) {
+  return json<{
+    ok: boolean;
+    redirect_url?: string;
+    connection_id?: string;
+    auth_scheme?: string;
+    error?: string;
+    detail?: string;
+  }>("/api/integrations/connect", {
+    method: "POST",
+    body: JSON.stringify({ toolkit_slug, redirect_url }),
+  });
+}
+
+export async function disconnectApp(connectionId: string) {
+  return json<{ ok: boolean; error?: string }>(
+    `/api/integrations/connections/${connectionId}`,
+    { method: "DELETE" },
   );
 }
 
