@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
+import { Send, Square, ChevronDown, Bot, User, Wrench } from "lucide-react";
 
 import { PrimitivesSummary, streamChat } from "../lib/api";
 
 interface Props {
   experimentId: string | null;
   primitives: PrimitivesSummary | null;
+  defaultAgent?: string;
+  onAgentChange?: (agent: string) => void;
+  compact?: boolean;
 }
 
 interface UIMessage {
@@ -19,17 +23,20 @@ interface UIMessage {
   pending?: boolean;
 }
 
-export default function Chat({ experimentId, primitives }: Props) {
+export default function Chat({ experimentId, primitives, defaultAgent, onAgentChange, compact }: Props) {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [agent, setAgent] = useState<string>("orchestrator");
+  const [agent, setAgent] = useState<string>(defaultAgent ?? "orchestrator");
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    // When experiment changes, reset thread so each experiment has its own conversation.
+    if (defaultAgent) setAgent(defaultAgent);
+  }, [defaultAgent]);
+
+  useEffect(() => {
     setThreadId(null);
     setMessages([]);
   }, [experimentId]);
@@ -73,7 +80,10 @@ export default function Chat({ experimentId, primitives }: Props) {
         {
           onMeta: (meta) => {
             setThreadId(meta.thread_id);
-            if (meta.agent) setAgent(meta.agent);
+            if (meta.agent) {
+              setAgent(meta.agent);
+              onAgentChange?.(meta.agent);
+            }
           },
           onToken: (t) => {
             setMessages((curr) => {
@@ -110,7 +120,7 @@ export default function Chat({ experimentId, primitives }: Props) {
                     ...next[i],
                     content:
                       next[i].content +
-                      "\n\n→ " +
+                      "\n\n-> " +
                       JSON.stringify(result, null, 2).slice(0, 2000),
                     ok,
                     pending: false,
@@ -156,12 +166,12 @@ export default function Chat({ experimentId, primitives }: Props) {
         },
         controller.signal,
       );
-    } catch (err) {
-      // already handled in onError
+    } catch {
+      // handled in onError
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming, threadId, experimentId, agent]);
+  }, [input, streaming, threadId, experimentId, agent, onAgentChange]);
 
   const stop = () => {
     abortRef.current?.abort();
@@ -170,55 +180,60 @@ export default function Chat({ experimentId, primitives }: Props) {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs text-slate-400">
-        <span>agent:</span>
-        <select
-          value={agent}
-          onChange={(e) => setAgent(e.target.value)}
-          className="rounded bg-slate-800 px-2 py-1 text-slate-100"
-        >
-          {(primitives?.agents.length ? primitives.agents : ["orchestrator"]).map(
-            (a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ),
-          )}
-        </select>
-        <span className="ml-3">
-          {experimentId ? `experiment: ${experimentId.slice(0, 8)}…` : "no experiment selected"}
+      {/* Agent bar */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.06] text-[11px] text-slate-400">
+        <div className="flex items-center gap-1.5">
+          <Bot size={12} className="text-emerald-400" />
+          <select
+            value={agent}
+            onChange={(e) => {
+              setAgent(e.target.value);
+              onAgentChange?.(e.target.value);
+            }}
+            className="glass-input !rounded-lg px-2 py-0.5 text-[11px] text-emerald-300 bg-transparent border-emerald-500/20"
+          >
+            {(primitives?.agents.length ? primitives.agents : ["orchestrator"]).map(
+              (a) => (
+                <option key={a} value={a}>{a}</option>
+              ),
+            )}
+          </select>
+        </div>
+        <span className="text-slate-600">|</span>
+        <span>
+          {experimentId ? `exp: ${experimentId.slice(0, 8)}...` : "no experiment"}
         </span>
-        <span className="ml-3">
-          {threadId ? `thread: ${threadId.slice(0, 12)}…` : ""}
-        </span>
+        {threadId && (
+          <>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-500">thread: {threadId.slice(0, 10)}...</span>
+          </>
+        )}
       </div>
 
+      {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-6"
+        className={clsx("flex-1 overflow-y-auto px-4 py-4", compact && "px-4 py-3")}
       >
         {messages.length === 0 && (
-          <div className="mx-auto max-w-2xl rounded-xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-300">
-            <h2 className="mb-2 text-lg font-semibold text-slate-100">
-              You're talking to your GTM team.
+          <div className="glass-card mx-auto max-w-xl p-5 text-center">
+            <h2 className="mb-1.5 text-sm font-medium text-slate-200">
+              Talk to your GTM team
             </h2>
-            <p className="mb-2">
-              Describe what you want them to do. Examples:
+            <p className="text-xs text-slate-400">
+              Describe what you want them to do: run experiments, draft sequences, search memory, or analyze results.
             </p>
-            <ul className="ml-4 list-disc text-slate-400">
-              <li>Find 20 e-commerce founders on Apollo who use Shopify and send them my pitch.</li>
-              <li>Set up a weekly experiment to email new prospects with the b2b-emailing play.</li>
-              <li>Search memory for what worked when we sold to dev tools last month.</li>
-            </ul>
           </div>
         )}
 
         {messages.map((m) => (
-          <Message key={m.id} m={m} />
+          <Message key={m.id} m={m} compact={compact} />
         ))}
       </div>
 
-      <div className="border-t border-slate-800 bg-slate-900/30 px-6 py-4">
+      {/* Input */}
+      <div className="border-t border-white/[0.06] px-4 py-3">
         <div className="flex gap-2">
           <textarea
             value={input}
@@ -230,24 +245,24 @@ export default function Chat({ experimentId, primitives }: Props) {
               }
             }}
             placeholder="What should the team do next?"
-            rows={2}
-            className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            rows={compact ? 1 : 2}
+            className="glass-input flex-1 resize-none px-3 py-2 text-sm text-slate-100"
             disabled={streaming}
           />
           {streaming ? (
             <button
               onClick={stop}
-              className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-medium hover:bg-rose-600"
+              className="glass-btn-danger flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm"
             >
-              Stop
+              <Square size={14} />
             </button>
           ) : (
             <button
               onClick={send}
               disabled={!input.trim()}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-40"
+              className="glass-btn flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm disabled:opacity-30"
             >
-              Send
+              <Send size={14} />
             </button>
           )}
         </div>
@@ -256,16 +271,17 @@ export default function Chat({ experimentId, primitives }: Props) {
   );
 }
 
-function Message({ m }: { m: UIMessage }) {
+function Message({ m, compact }: { m: UIMessage; compact?: boolean }) {
   if (m.role === "tool") {
     return (
-      <div className="mx-auto my-2 max-w-3xl rounded border border-slate-800 bg-slate-900/30 px-3 py-2 text-xs text-slate-400">
-        <div className="flex items-center justify-between">
+      <div className="mx-auto my-2 max-w-2xl glass-card !rounded-xl px-3 py-2 text-xs">
+        <div className="flex items-center gap-2 text-slate-400">
+          <Wrench size={10} />
           <span className="font-mono">
-            {m.pending ? "→" : m.ok ? "✓" : "✗"} {m.tool_name}
+            {m.pending ? "..." : m.ok ? "done" : "failed"} {m.tool_name}
           </span>
         </div>
-        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
+        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-slate-500">
           {m.content}
         </pre>
       </div>
@@ -274,33 +290,47 @@ function Message({ m }: { m: UIMessage }) {
 
   if (m.role === "system") {
     return (
-      <div className="mx-auto my-2 max-w-3xl rounded border border-amber-900/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+      <div className="mx-auto my-2 max-w-2xl rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
         {m.content}
       </div>
     );
   }
 
+  const isUser = m.role === "user";
+
   return (
     <div
       className={clsx(
-        "mx-auto my-3 flex max-w-3xl",
-        m.role === "user" ? "justify-end" : "justify-start",
+        "mx-auto my-2 flex max-w-2xl",
+        isUser ? "justify-end" : "justify-start",
       )}
     >
-      <div
-        className={clsx(
-          "max-w-2xl rounded-xl px-4 py-3",
-          m.role === "user"
-            ? "bg-emerald-700/60 text-slate-50"
-            : "bg-slate-900 text-slate-100",
-          m.pending && "opacity-90",
+      <div className="flex items-start gap-2">
+        {!isUser && (
+          <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+            <Bot size={12} />
+          </div>
         )}
-      >
-        <div className="prose-chat">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {m.content || (m.pending ? "…" : "")}
-          </ReactMarkdown>
+        <div
+          className={clsx(
+            "max-w-xl rounded-2xl px-4 py-2.5",
+            isUser
+              ? "glass border border-emerald-500/20 text-slate-100"
+              : "glass text-slate-200",
+            m.pending && "opacity-80",
+          )}
+        >
+          <div className="prose-chat">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {m.content || (m.pending ? "..." : "")}
+            </ReactMarkdown>
+          </div>
         </div>
+        {isUser && (
+          <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-700/50 text-slate-400">
+            <User size={12} />
+          </div>
+        )}
       </div>
     </div>
   );
