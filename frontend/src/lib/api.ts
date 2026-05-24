@@ -248,6 +248,41 @@ export async function updateIntegrationKeys(keys: {
   });
 }
 
+// --- Research Tool API Keys ---
+
+export interface ToolKeyInfo {
+  name: string;
+  label: string;
+  env_var: string;
+  configured: boolean;
+  masked_key: string;
+  required_by: string[];
+  description: string;
+}
+
+export interface NoKeyTool {
+  name: string;
+  label: string;
+  status: string;
+}
+
+export async function getToolKeys() {
+  return json<{ tool_keys: ToolKeyInfo[]; no_key_tools: NoKeyTool[] }>(
+    "/api/integrations/tool-keys",
+  );
+}
+
+export async function updateToolKeys(keys: {
+  serper_api_key?: string;
+  brave_search_api_key?: string;
+  youtube_api_key?: string;
+}) {
+  return json<{ ok: boolean; updated: string[] }>("/api/integrations/tool-keys", {
+    method: "PUT",
+    body: JSON.stringify(keys),
+  });
+}
+
 // --- App catalog & connections (Composio) ---
 
 export interface AppInfo {

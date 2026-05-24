@@ -33,6 +33,22 @@ class IntegrationKeyUpdate(BaseModel):
     pipedream_api_key: str | None = None
 
 
+class ToolKeyStatus(BaseModel):
+    name: str
+    label: str
+    env_var: str
+    configured: bool
+    masked_key: str
+    required_by: list[str]
+    description: str
+
+
+class ToolKeyUpdate(BaseModel):
+    serper_api_key: str | None = None
+    brave_search_api_key: str | None = None
+    youtube_api_key: str | None = None
+
+
 class ConnectRequest(BaseModel):
     toolkit_slug: str
     user_id: str = "default"
@@ -161,6 +177,122 @@ async def update_integration_keys(request: Request, body: IntegrationKeyUpdate) 
         updated.append("pipedream")
 
     logger.info("Integration keys updated: %s", ", ".join(updated))
+    return {"ok": True, "updated": updated}
+
+
+# ---------------------------------------------------------------------------
+# Research Tool API Keys
+# ---------------------------------------------------------------------------
+
+_TOOL_KEY_DEFS: list[dict[str, Any]] = [
+    {
+        "name": "serper",
+        "label": "Serper.dev",
+        "env_var": "SERPER_API_KEY",
+        "required_by": ["web_search", "search_prospects"],
+        "description": "Google Search API for market research and prospect discovery.",
+    },
+    {
+        "name": "brave",
+        "label": "Brave Search",
+        "env_var": "BRAVE_SEARCH_API_KEY",
+        "required_by": ["web_search", "search_prospects"],
+        "description": "Alternative search API (used if Serper is not configured).",
+    },
+    {
+        "name": "youtube",
+        "label": "YouTube Data API",
+        "env_var": "YOUTUBE_API_KEY",
+        "required_by": ["youtube_search"],
+        "description": "YouTube channel and video search for prospect content personalization.",
+    },
+]
+
+
+@router.get("/integrations/tool-keys")
+async def get_tool_keys() -> dict[str, Any]:
+    """Return status of research tool API keys."""
+    tools = []
+    for defn in _TOOL_KEY_DEFS:
+        env_val = os.environ.get(defn["env_var"], "")
+        tools.append({
+            **defn,
+            "configured": bool(env_val),
+            "masked_key": _mask_key(env_val) if env_val else "",
+        })
+
+    # Also report which tools work without keys.
+    no_key_tools = [
+        {"name": "browser_fetch", "label": "Browser Fetch", "status": "always_available"},
+        {"name": "scrape_website", "label": "Web Scraper", "status": "always_available"},
+        {"name": "csv_search", "label": "CSV Parser", "status": "always_available"},
+        {"name": "pdf_search", "label": "PDF Parser", "status": "always_available"},
+        {"name": "structured_extract", "label": "Structured Extract (TrustCall)", "status": "always_available"},
+        {"name": "patch_experiment_config", "label": "Patch Config (TrustCall)", "status": "always_available"},
+    ]
+
+    return {"tool_keys": tools, "no_key_tools": no_key_tools}
+
+
+@router.put("/integrations/tool-keys")
+async def update_tool_keys(request: Request, body: ToolKeyUpdate) -> dict[str, Any]:
+    """Persist research tool API keys to .env and hot-reload in memory."""
+    env_path = _env_file_path(request)
+    updated: list[str] = []
+
+    key_updates: dict[str, str | None] = {}
+    if body.serper_api_key is not None:
+        key_updates["SERPER_API_KEY"] = body.serper_api_key
+    if body.brave_search_api_key is not None:
+        key_updates["BRAVE_SEARCH_API_KEY"] = body.brave_search_api_key
+    if body.youtube_api_key is not None:
+        key_updates["YOUTUBE_API_KEY"] = body.youtube_api_key
+
+    if not key_updates:
+        return {"ok": True, "updated": []}
+
+    # Read existing .env lines.
+    existing_lines: list[str] = []
+    if env_path.exists():
+        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
+
+    # Build new .env content.
+    new_lines: list[str] = []
+    seen_keys: set[str] = set()
+    for line in existing_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        eq_idx = stripped.find("=")
+        if eq_idx == -1:
+            new_lines.append(line)
+            continue
+        env_key = stripped[:eq_idx].strip()
+        if env_key in key_updates:
+            val = key_updates[env_key]
+            if val:
+                new_lines.append(f"{env_key}={val}")
+            seen_keys.add(env_key)
+        else:
+            new_lines.append(line)
+
+    for env_key, val in key_updates.items():
+        if env_key not in seen_keys and val:
+            new_lines.append(f"{env_key}={val}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+    # Hot-reload environment variables.
+    for env_key, val in key_updates.items():
+        if val:
+            os.environ[env_key] = val
+            updated.append(env_key)
+        else:
+            os.environ.pop(env_key, None)
+            updated.append(env_key)
+
+    logger.info("Tool keys updated: %s", ", ".join(updated))
     return {"ok": True, "updated": updated}
 
 
