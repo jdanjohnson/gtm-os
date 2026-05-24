@@ -261,17 +261,18 @@ def setup():
     # Step 2: API key (skip for claude/ollama — they don't need one)
     api_key_env = ""
     if provider == "claude":
-        from .engine.anthropic_oauth import credentials_path
+        from .engine.anthropic_oauth import read_credentials
 
-        creds_path = credentials_path()
-        if creds_path:
+        creds = read_credentials()
+        if creds:
             console.print("\n[bold]2. Claude Code Auth[/bold]")
-            console.print(f"   [green]✓ Found credentials at {creds_path}[/green]")
+            sub = creds.subscription_type or "unknown"
+            console.print(f"   [green]✓ Found Claude credentials (plan: {sub})[/green]")
             console.print("   No API key needed — using your Claude subscription.")
         else:
             console.print("\n[bold]2. Claude Code Auth[/bold]")
             console.print("   [yellow]⚠ No Claude credentials found.[/yellow]")
-            console.print("   Run `claude login` in another terminal first, then re-run setup.")
+            console.print("   Run `claude auth login` in another terminal first, then re-run setup.")
             console.print("   (Install Claude Code: npm install -g @anthropic-ai/claude-code)")
     elif provider not in ("ollama",):
         console.print("\n[bold]2. API Key[/bold]")
