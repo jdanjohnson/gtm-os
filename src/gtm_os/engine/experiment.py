@@ -25,6 +25,7 @@ from .durability import DurableContext
 from .harness import HarnessOptions, run_agent
 from .loader import load_primitives
 from .memory import VectorMemory
+from .pipedream_tools import PipedreamIntegration, build_pipedream_tools
 from .store import Store
 
 logger = logging.getLogger(__name__)
@@ -73,12 +74,14 @@ class ExperimentRunner:
         store: Store,
         memory: VectorMemory,
         composio: ComposioIntegration,
+        pipedream: PipedreamIntegration | None = None,
         context_manager: ContextManager | None = None,
     ) -> None:
         self.config = config
         self.store = store
         self.memory = memory
         self.composio = composio
+        self.pipedream = pipedream or PipedreamIntegration(None)
         self.context_manager = context_manager or ContextManager(config.llm)
         self._primitives_cache: tuple[float, Primitives] | None = None
 
@@ -110,7 +113,8 @@ class ExperimentRunner:
             play_ids=play_ids,
         )
         composio = build_composio_tools(self.composio)
-        return custom + composio
+        pipedream = build_pipedream_tools(self.pipedream)
+        return custom + composio + pipedream
 
     # ---------- create / mutate ----------
 
@@ -452,7 +456,8 @@ def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None 
     if phase == "build":
         return (
             f"{base} Build the assets: prospect list, copy, scripts, or content. "
-            "Use composio_discover_tools / composio_execute_action for real integrations. "
+            "Use composio_discover_tools / composio_execute_action or pipedream_list_apps / "
+            "pipedream_run_action for real integrations. "
             "When complete, use request_approval(experiment_id, message) and wait — "
             "DO NOT transition to 'execute' yourself."
             f"{play_context}"
