@@ -52,9 +52,20 @@ export interface MemoryItem {
   updated_at?: string;
 }
 
+export interface PlayMeta {
+  id: string;
+  name: string;
+  kind: string; // playbook | workflow | skill | tool | play
+  description: string;
+  category: string;
+  tags: string[];
+  channel: string;
+}
+
 export interface PrimitivesSummary {
   agents: string[];
   plays: string[];
+  plays_meta: PlayMeta[];
   phase_rules: string[];
   channel_rules: string[];
   brand_loaded: boolean;

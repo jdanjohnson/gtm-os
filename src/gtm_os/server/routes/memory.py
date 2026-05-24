@@ -71,9 +71,27 @@ async def search_memory(body: SearchBody, request: Request) -> dict[str, Any]:
 async def get_primitives(request: Request) -> dict[str, Any]:
     gtm = request.app.state.gtm
     prim = gtm.runner.load_primitives_cached()
+    plays_list = []
+    for pid in sorted(prim.plays.keys()):
+        meta = prim.play_meta.get(pid)
+        if meta:
+            plays_list.append(
+                {
+                    "id": meta.id,
+                    "name": meta.name,
+                    "kind": meta.kind,
+                    "description": meta.description,
+                    "category": meta.category,
+                    "tags": meta.tags,
+                    "channel": meta.channel,
+                }
+            )
+        else:
+            plays_list.append({"id": pid, "name": pid, "kind": "play", "description": "", "category": "", "tags": [], "channel": "multi"})
     return {
         "agents": sorted(prim.agents.keys()),
         "plays": sorted(prim.plays.keys()),
+        "plays_meta": plays_list,
         "phase_rules": sorted(prim.rules.phase_rules.keys()),
         "channel_rules": sorted(prim.rules.channel_rules.keys()),
         "brand_loaded": bool(prim.brand.body),

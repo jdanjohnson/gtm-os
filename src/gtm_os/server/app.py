@@ -21,7 +21,6 @@ from ..engine.store import Store
 from .routes import brand as brand_route
 from .routes import chat as chat_route
 from .routes import experiments as experiments_route
-from .routes import gallery as gallery_route
 from .routes import memory as memory_route
 from .routes import metrics as metrics_route
 from .routes import templates as templates_route
@@ -97,16 +96,10 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(brand_route.router, prefix="/api")
     app.include_router(chat_route.router, prefix="/api")
     app.include_router(experiments_route.router, prefix="/api")
-    app.include_router(gallery_route.router, prefix="/api")
     app.include_router(memory_route.router, prefix="/api")
     app.include_router(metrics_route.router, prefix="/api")
     app.include_router(templates_route.router, prefix="/api")
     app.include_router(trust_route.router, prefix="/api")
-
-    # Initialize the gallery from the gallery/ directory.
-    gallery_dir = cfg.project_root / "gallery"
-    if gallery_dir.exists():
-        gallery_route.init_gallery(str(gallery_dir))
 
     # Static frontend.
     frontend_dir = Path(__file__).resolve().parent / "frontend_dist"
