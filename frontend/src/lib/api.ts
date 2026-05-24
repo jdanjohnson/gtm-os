@@ -237,6 +237,64 @@ export async function updateIntegrationKeys(keys: {
   });
 }
 
+// --- App catalog & connections (Composio) ---
+
+export interface AppInfo {
+  slug: string;
+  name: string;
+  description: string;
+  logo: string;
+  categories: string[];
+  auth_schemes: string[];
+}
+
+export interface Connection {
+  id: string;
+  toolkit_slug: string;
+  toolkit_name: string;
+  toolkit_logo: string;
+  status: string;
+  created_at: string;
+  user_id: string;
+}
+
+export async function listApps(search = "", category = "", limit = 50) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (category) params.set("category", category);
+  params.set("limit", String(limit));
+  return json<{ apps: AppInfo[]; error?: string }>(
+    `/api/integrations/apps?${params}`,
+  );
+}
+
+export async function listConnections() {
+  return json<{ connections: Connection[]; error?: string }>(
+    "/api/integrations/connections",
+  );
+}
+
+export async function initiateConnect(toolkit_slug: string, redirect_url?: string) {
+  return json<{
+    ok: boolean;
+    redirect_url?: string;
+    connection_id?: string;
+    auth_scheme?: string;
+    error?: string;
+    detail?: string;
+  }>("/api/integrations/connect", {
+    method: "POST",
+    body: JSON.stringify({ toolkit_slug, redirect_url }),
+  });
+}
+
+export async function disconnectApp(connectionId: string) {
+  return json<{ ok: boolean; error?: string }>(
+    `/api/integrations/connections/${connectionId}`,
+    { method: "DELETE" },
+  );
+}
+
 export interface ChatEvent {
   type: "meta" | "token" | "tool_call" | "tool_result" | "final" | "error";
   payload: unknown;
