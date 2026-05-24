@@ -1,0 +1,18 @@
+kind: skill
+id: seo-optimizer
+name: SEO Optimizer
+description: Keyword analysis, readability scoring, and competitor comparison.
+category: marketing
+tags:
+- seo
+- keywords
+- optimization
+source_repo: OneWave-AI/claude-skills
+input:
+- name: content
+  type: markdown
+  description: Content to optimize
+output:
+- name: seo_report
+  type: json
+  description: Keyword density, readability scores, recommendations

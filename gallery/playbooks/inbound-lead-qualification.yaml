@@ -1,0 +1,60 @@
+kind: playbook
+id: inbound-lead-qualification
+name: Inbound Lead Qualification Pipeline
+description: Qualify inbound leads from email/form submissions — score by ICP fit, intent, and urgency — route to sales or nurture.
+category: inbound
+tags: [inbound, lead-qualification, email, crm, routing]
+source_repo: OneWave-AI/claude-skills
+
+outcome:
+  goal: Qualify inbound leads within 5 minutes and route to the right sales motion
+  hypothesis: Automated lead scoring + instant routing reduces time-to-first-contact from 24h to <5min, increasing qualified meeting rate by 3x.
+  success_metrics:
+    - metric: time_to_first_contact
+      target: "<5 minutes"
+    - metric: qualified_rate
+      target: ">25% of inbound leads are ICP-fit"
+    - metric: meeting_conversion
+      target: ">15% of qualified leads book a meeting"
+
+knowledge:
+  - id: icp-definition
+    description: Company size, vertical, title, budget signals that define a qualified lead
+    required: true
+  - id: scoring-weights
+    description: How to weight firmographic, behavioral, and intent signals
+    required: true
+  - id: routing-rules
+    description: Score thresholds for hot (route to AE), warm (nurture), cold (archive)
+    required: true
+
+workflows:
+  - inbound-scoring-pipeline
+  - crm-activity-logging
+
+skills:
+  - inbound-lead-qualifier
+  - lead-scoring-model
+  - intent-signal-aggregator
+
+tools:
+  - id: gmail-api
+    purpose: Read inbound emails and form submission notifications
+  - id: acrm-cli
+    purpose: Create/update lead records with scores and routing
+  - id: email-sender
+    purpose: Send instant follow-up to hot leads
+
+agent:
+  role: Inbound Qualification Agent
+  process: event-driven
+  trigger: new_inbound_lead
+  phases: [design, build, execute, measure, learn]
+
+experiments:
+  - name: Speed-to-Lead Test
+    description: 5-min auto-response vs 24h manual response, measure meeting rate
+  - name: Scoring Model Test
+    description: Firmographic-only vs firmographic+behavioral scoring, measure qualification accuracy
+  - name: Routing Threshold Test
+    description: Aggressive (score >50 = hot) vs conservative (score >70 = hot), measure AE time waste

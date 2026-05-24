@@ -1,0 +1,49 @@
+kind: workflow
+id: deal-qualification-pipeline
+name: Deal Qualification Pipeline
+description: Qualify deals through MEDDIC/BANT frameworks — map buying committee, assess risk, score deal health, recommend next actions.
+category: sales
+tags: [deals, qualification, meddic, bant, pipeline]
+source_repos:
+  - OneWave-AI/claude-skills
+  - cluster-software/agent-crm
+
+steps:
+  - name: Load deal data
+    tool: acrm-cli
+    input: deal_id
+    description: Pull deal record, contact history, activity log from CRM
+
+  - name: Run MEDDIC assessment
+    skill: deal-review-framework
+    input: deal_data
+    config: { methodology: meddic }
+    description: Score Metrics, Economic Buyer, Decision Criteria, Decision Process, Identify Pain, Champion
+
+  - name: Map buying committee
+    skill: champion-identifier
+    input: deal_contacts
+    description: Identify roles — champion, economic buyer, technical evaluator, blocker, coach
+
+  - name: Score deal momentum
+    skill: deal-momentum-analyzer
+    input: deal_activity_log
+    description: Score deal velocity from engagement patterns and recency
+
+  - name: Identify objection risks
+    skill: objection-pattern-detector
+    input: deal_notes, lost_deal_patterns
+    description: Flag likely objections based on patterns from historical lost deals
+
+  - name: Generate next actions
+    input: meddic_score, committee_map, momentum, risks
+    output: deal_action_plan
+    description: Recommend specific next actions to advance or de-risk the deal
+
+  - name: Update CRM
+    tool: acrm-cli
+    input: deal_id, qualification_data
+    description: Update deal record with qualification score, risks, and action plan
+
+tools: [acrm-cli]
+skills: [deal-review-framework, champion-identifier, deal-momentum-analyzer, objection-pattern-detector]

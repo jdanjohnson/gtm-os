@@ -1,0 +1,66 @@
+kind: playbook
+id: competitor-intel-loop
+name: Competitive Intelligence Loop
+description: Run ongoing competitive monitoring — track pricing, content, hiring, product changes — and generate actionable briefs on a schedule.
+category: intelligence
+tags: [competitive-intel, monitoring, research, recurring]
+source_repo: calesthio/Crucix
+
+outcome:
+  goal: Detect competitive threats and opportunities faster than competitors detect yours
+  hypothesis: Monitoring competitor pricing, hiring, content, and product pages weekly will surface actionable signals within 48 hours of change, enabling faster GTM response.
+  success_metrics:
+    - metric: signal_detection_speed
+      target: "<48 hours from competitor change to internal brief"
+    - metric: actionable_signals_per_week
+      target: ">3"
+    - metric: false_positive_rate
+      target: "<20%"
+
+knowledge:
+  - id: competitor-watchlist
+    description: Companies, products, URLs, and people to track
+    required: true
+  - id: alert-thresholds
+    description: What constitutes a meaningful signal vs noise per data source
+    required: true
+  - id: brief-format
+    description: Structure for briefs — signal, context, implication, recommended action
+    required: true
+  - id: market-context
+    description: Industry-specific interpretation rules for signals
+    required: false
+
+workflows:
+  - competitor-monitoring-sweep
+  - intelligence-brief-generation
+
+skills:
+  - competitor-intel-agent
+  - competitor-content-analyzer
+  - competitor-price-tracker
+  - intent-signal-aggregator
+
+tools:
+  - id: changedetection-io
+    purpose: Monitor competitor websites for pricing, content, and product changes
+  - id: web-search
+    purpose: Search for competitor news, press releases, job postings
+  - id: maigret
+    purpose: Track competitor employee social presence and activity
+  - id: llm-scraper
+    purpose: Extract structured data from competitor pages
+
+agent:
+  role: Competitive Intelligence Analyst
+  process: polling
+  interval: weekly
+  phases: [design, build, execute, measure, learn]
+
+experiments:
+  - name: Signal Precision Tuning
+    description: Tune alert thresholds over 30 days, measure false positive reduction
+  - name: Source Coverage Test
+    description: Web monitoring only vs web + social + job boards, measure signal completeness
+  - name: Brief Automation Test
+    description: Auto-generated briefs vs human-written, measure actionability rating

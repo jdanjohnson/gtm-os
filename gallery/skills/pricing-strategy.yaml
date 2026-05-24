@@ -1,0 +1,18 @@
+kind: skill
+id: pricing-strategy
+name: Pricing Strategy
+description: Pricing model design with competitive analysis.
+category: strategy
+tags:
+- pricing
+- strategy
+- competitive
+source_repo: OneWave-AI/claude-skills
+input:
+- name: product_data
+  type: json
+  description: Product features, costs, target market
+output:
+- name: pricing_model
+  type: json
+  description: Pricing tiers, positioning, competitive comparison

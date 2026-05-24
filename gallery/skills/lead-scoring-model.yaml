@@ -1,0 +1,18 @@
+kind: skill
+id: lead-scoring-model
+name: Lead Scoring Model
+description: Build custom lead scoring from historical win/loss data.
+category: sales
+tags:
+- scoring
+- qualification
+- analytics
+source_repo: OneWave-AI/claude-skills
+input:
+- name: historical_deals
+  type: csv
+  description: Won and lost deals with attributes
+output:
+- name: scoring_model
+  type: json
+  description: Weighted scoring rules and thresholds

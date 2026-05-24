@@ -1,0 +1,18 @@
+kind: skill
+id: champion-identifier
+name: Champion Identifier
+description: Find internal champions in target accounts.
+category: sales
+tags:
+- champions
+- accounts
+- stakeholders
+source_repo: OneWave-AI/claude-skills
+input:
+- name: account_contacts
+  type: crm_export
+  description: All known contacts at the account
+output:
+- name: champion_analysis
+  type: json
+  description: Ranked champion candidates with engagement strategy

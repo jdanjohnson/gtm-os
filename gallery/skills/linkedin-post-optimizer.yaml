@@ -1,0 +1,18 @@
+kind: skill
+id: linkedin-post-optimizer
+name: LinkedIn Post Optimizer
+description: Professional narrative posts with hooks and engagement patterns.
+category: marketing
+tags:
+- linkedin
+- optimization
+- engagement
+source_repo: OneWave-AI/claude-skills
+input:
+- name: draft_post
+  type: string
+  description: Draft LinkedIn post
+output:
+- name: optimized_post
+  type: string
+  description: Optimized post with hook, structure, and CTA

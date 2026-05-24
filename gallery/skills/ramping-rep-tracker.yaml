@@ -1,0 +1,18 @@
+kind: skill
+id: ramping-rep-tracker
+name: Ramping Rep Tracker
+description: 30/60/90/120 day ramp milestones.
+category: sales
+tags:
+- onboarding
+- ramping
+- milestones
+source_repo: OneWave-AI/claude-skills
+input:
+- name: rep_start_date
+  type: string
+  description: Rep start date and role
+output:
+- name: ramp_plan
+  type: json
+  description: Milestone targets per ramp period

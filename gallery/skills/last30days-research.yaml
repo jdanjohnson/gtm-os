@@ -1,0 +1,20 @@
+kind: skill
+id: last30days-research
+name: Last 30 Days Research
+description: Research any topic across Reddit, X, YouTube, HN, Polymarket, and the
+  web.
+category: research
+tags:
+- research
+- multi-platform
+- trends
+- intelligence
+source_repo: mvanhorn/last30days-skill
+input:
+- name: topic
+  type: string
+  description: Topic to research across platforms
+output:
+- name: research_summary
+  type: markdown
+  description: Grounded summary with sources from multiple platforms

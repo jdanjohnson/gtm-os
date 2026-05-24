@@ -1,0 +1,18 @@
+kind: skill
+id: objection-pattern-detector
+name: Objection Pattern Detector
+description: Mine lost deals for recurring objection patterns.
+category: sales
+tags:
+- objections
+- analysis
+- lost-deals
+source_repo: OneWave-AI/claude-skills
+input:
+- name: lost_deals
+  type: crm_export
+  description: Lost deal records with notes and reasons
+output:
+- name: patterns
+  type: json
+  description: Top objection patterns with frequency and responses

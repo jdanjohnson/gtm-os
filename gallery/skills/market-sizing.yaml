@@ -1,0 +1,18 @@
+kind: skill
+id: market-sizing
+name: Market Sizing
+description: TAM/SAM/SOM with top-down and bottom-up estimates.
+category: strategy
+tags:
+- market-sizing
+- tam
+- strategy
+source_repo: OneWave-AI/claude-skills
+input:
+- name: market_definition
+  type: json
+  description: Vertical, geography, product category
+output:
+- name: market_size
+  type: json
+  description: TAM/SAM/SOM with methodology and sources

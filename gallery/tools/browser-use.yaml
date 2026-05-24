@@ -1,0 +1,20 @@
+kind: tool
+id: browser-use
+name: Browser Use
+description: AI-controlled browser automation — the agent sees and interacts with
+  web pages.
+category: browser
+tags:
+- browser
+- automation
+- ai-controlled
+source_repo: browser-use/browser-use
+install: pip install browser-use
+capabilities:
+- LLM-driven browser control
+- Visual page understanding
+- Form filling and navigation
+- Multi-tab support
+- Custom action injection
+- Persistent sessions
+integration_pattern: python_library

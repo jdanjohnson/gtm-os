@@ -1,0 +1,40 @@
+kind: workflow
+id: seo-research-pipeline
+name: SEO Research Pipeline
+description: Full SEO research workflow — SERP analysis, social research, keyword validation, article planning — before any content is written.
+category: seo
+tags: [seo, research, keywords, serp-analysis]
+source_repos:
+  - TheCraigHewitt/seomachine
+
+steps:
+  - name: SERP analysis
+    tool: web-search
+    input: target_keyword
+    description: Analyze top 5 ranking articles — structure, word count, gaps, missing angles, outdated info
+
+  - name: Social research
+    tool: web-search
+    input: target_keyword
+    config:
+      sources: [reddit, youtube]
+      count: 5_each
+    description: Analyze 5 Reddit threads + 5 YouTube videos for unique insights not in SEO content
+
+  - name: Keyword validation
+    tool: web-search
+    input: target_keyword
+    description: Validate search volume, commercial intent, and keyword difficulty
+
+  - name: Cluster mapping
+    skill: seo-keyword-cluster-builder
+    input: primary_keyword, serp_data
+    description: Map the keyword cluster — primary, secondary, long-tail, question queries
+
+  - name: Article planning
+    input: serp_analysis, social_research, cluster_map
+    description: Merge SERP gaps, social insights, and cluster map into section-by-section article plan
+    output: article_plan
+
+tools: [web-search]
+skills: [seo-keyword-cluster-builder]

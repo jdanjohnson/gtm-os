@@ -1,0 +1,35 @@
+kind: workflow
+id: crm-activity-logging
+name: CRM Activity Logging
+description: Log activity from any GTM motion back to the CRM — emails sent, calls made, meetings held, deals updated.
+category: operations
+tags: [crm, logging, tracking, pipeline]
+source_repos:
+  - cluster-software/agent-crm
+
+steps:
+  - name: Receive activity event
+    input: activity_event
+    description: Accept activity data (email sent, call logged, meeting held, deal stage change)
+
+  - name: Resolve contact
+    tool: acrm-cli
+    input: contact_identifier
+    description: Match activity to existing person/company in CRM, create if not found
+
+  - name: Log activity
+    tool: acrm-cli
+    input: activity_data, resolved_contact
+    description: Write activity record to CRM with timestamp, type, and context
+
+  - name: Update deal stage
+    tool: acrm-cli
+    input: deal_id, new_stage
+    description: If activity triggers a stage change, update the deal
+    conditional: stage_change_triggered
+
+  - name: Checkpoint
+    description: CRM write creates a versioned checkpoint (branch/revert supported)
+
+tools: [acrm-cli]
+skills: []

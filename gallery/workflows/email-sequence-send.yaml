@@ -1,0 +1,43 @@
+kind: workflow
+id: email-sequence-send
+name: Email Sequence Send Pipeline
+description: Take approved prospect list, generate personalized email sequences, send via email tool, log activity to CRM.
+category: outbound
+tags: [email, outbound, sequences, personalization]
+source_repos:
+  - kathrynwu/GTMbrain
+  - OneWave-AI/claude-skills
+
+steps:
+  - name: Load approved prospects
+    input: enriched_prospects
+    description: Read the approved, enriched prospect list from previous workflow
+
+  - name: Generate personalized first lines
+    skill: personalization-at-scale
+    input: prospect_data
+    description: Write personalized first lines for each prospect using company + person context
+
+  - name: Build email sequences
+    skill: cold-email-sequence-generator
+    input: personalized_data, outreach_templates
+    description: Generate multi-touch email sequences (first-touch, 2-3 follow-ups, break-up)
+
+  - name: Apply subject line optimization
+    skill: email-subject-line-optimizer
+    input: sequences
+    description: Generate and select optimized subject lines per sequence
+    optional: true
+
+  - name: Send sequences
+    tool: email-sender
+    input: sequences
+    description: Load sequences into sending tool (Instantly, Smartlead, or SMTP)
+
+  - name: Log to CRM
+    tool: acrm-cli
+    input: send_results
+    description: Log sent emails, prospect status, and sequence stage to CRM
+
+tools: [email-sender, acrm-cli]
+skills: [personalization-at-scale, cold-email-sequence-generator, email-subject-line-optimizer]

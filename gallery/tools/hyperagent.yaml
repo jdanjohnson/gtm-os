@@ -1,0 +1,18 @@
+kind: tool
+id: hyperagent
+name: HyperAgent
+description: Playwright-based AI web agent with multi-model support.
+category: browser
+tags:
+- browser
+- ai-agent
+- playwright
+source_repo: nichochar/nichochar
+install: npm install hyperagent
+capabilities:
+- Playwright-based browser control
+- Multi-model support (GPT-4, Claude, etc.)
+- Structured data extraction
+- Multi-page navigation
+- Screenshot and DOM analysis
+integration_pattern: npm_library

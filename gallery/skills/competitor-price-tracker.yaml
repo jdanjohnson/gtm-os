@@ -1,0 +1,18 @@
+kind: skill
+id: competitor-price-tracker
+name: Competitor Price Tracker
+description: Monitor competitor pricing changes.
+category: marketing
+tags:
+- competitor
+- pricing
+- monitoring
+source_repo: OneWave-AI/claude-skills
+input:
+- name: competitor_pricing_urls
+  type: csv
+  description: Competitor pricing page URLs
+output:
+- name: price_changes
+  type: json
+  description: Detected price changes with before/after comparison

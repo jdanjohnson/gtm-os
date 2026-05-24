@@ -1,0 +1,18 @@
+kind: skill
+id: expansion-revenue-finder
+name: Expansion Revenue Finder
+description: Identify upsell and cross-sell opportunities in existing accounts.
+category: sales
+tags:
+- upsell
+- expansion
+- revenue
+source_repo: OneWave-AI/claude-skills
+input:
+- name: customer_data
+  type: crm_export
+  description: Current customers with usage and contract data
+output:
+- name: opportunities
+  type: json
+  description: Ranked expansion opportunities with revenue estimates

@@ -1,0 +1,59 @@
+kind: playbook
+id: cold-outbound-local-smb
+name: Local SMB Cold Outbound Campaign
+description: Run outbound experiments targeting local businesses — med spas, dentists, roofers, restaurants — using Openmart for prospecting and local-specific messaging.
+category: outbound
+tags: [sales, email, prospecting, local-smb, outbound]
+source_repo: kathrynwu/GTMbrain
+
+outcome:
+  goal: Book meetings with local business owners through localized cold outreach
+  hypothesis: Local SMB outbound targeting the owner (not front-desk) with city-specific proof points converts at 2x the rate of generic outreach.
+  success_metrics:
+    - metric: reply_rate
+      target: ">5%"
+    - metric: meetings_booked_per_100
+      target: ">3"
+    - metric: owner_reach_rate
+      target: ">60% of replies from owners"
+
+knowledge:
+  - id: icp-definition-local
+    description: Vertical, geography, business size, owner persona, reject rules
+    required: true
+  - id: local-outreach-templates
+    description: City-specific subject lines, local proof points, first-touch + follow-ups
+    required: true
+  - id: brand-voice
+    description: Tone guidelines — casual, local, non-agency-sounding
+    required: true
+
+workflows:
+  - prospect-enrichment
+  - email-sequence-send
+  - crm-activity-logging
+
+skills:
+  - cold-email-sequence-generator
+  - personalization-at-scale
+
+tools:
+  - id: openmart-api
+    purpose: Find local businesses by vertical + geography
+  - id: email-sender
+    purpose: Send local outbound sequences
+  - id: acrm-cli
+    purpose: Log leads and outcomes
+
+agent:
+  role: Local SMB Outbound Operator
+  process: sequential
+  phases: [design, build, execute, measure, learn]
+
+experiments:
+  - name: Owner vs Front-Desk Test
+    description: Target owner directly vs generic email, measure who responds
+  - name: Local Proof Test
+    description: City-specific proof points vs generic copy, measure reply rate
+  - name: Vertical Test
+    description: Med spas vs dentists vs roofers in same city, measure conversion

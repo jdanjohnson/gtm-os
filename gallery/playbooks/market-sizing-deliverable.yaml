@@ -1,0 +1,54 @@
+kind: playbook
+id: market-sizing-deliverable
+name: TAM/SAM/SOM Market Sizing
+description: Produce a full TAM/SAM/SOM deliverable for a market vertical — top-down and bottom-up estimates with cited data sources.
+category: strategy
+tags: [strategy, market-sizing, tam, research, fundraising]
+source_repo: OneWave-AI/claude-skills
+
+outcome:
+  goal: Deliver a defensible market sizing analysis for fundraising, board decks, or GTM planning
+  hypothesis: Combining top-down (industry reports) and bottom-up (ICP count x ACV) approaches produces a more credible market size than either alone.
+  success_metrics:
+    - metric: source_count
+      target: ">10 cited sources"
+    - metric: methodology_coverage
+      target: "Both top-down and bottom-up presented"
+    - metric: production_time
+      target: "<3 hours"
+
+knowledge:
+  - id: market-definition
+    description: What vertical, what geography, what product category
+    required: true
+  - id: pricing-model
+    description: Current or planned ACV for bottom-up calculation
+    required: true
+  - id: competitor-landscape
+    description: Known competitors and their estimated revenue for triangulation
+    required: false
+
+workflows:
+  - storm-research-pipeline
+
+skills:
+  - market-sizing
+  - pricing-strategy
+  - competitor-intel-agent
+
+tools:
+  - id: web-search
+    purpose: Find industry reports, analyst estimates, public filings
+  - id: llm-scraper
+    purpose: Extract market data from research reports and press releases
+
+agent:
+  role: Market Analyst
+  process: sequential
+  phases: [design, build, execute, measure, learn]
+
+experiments:
+  - name: Methodology Comparison
+    description: Top-down only vs bottom-up only vs combined, compare credibility with stakeholders
+  - name: Adjacent Market Test
+    description: Size the core market vs 2 adjacent markets, identify expansion opportunities
