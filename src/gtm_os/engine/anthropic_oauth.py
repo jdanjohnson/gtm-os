@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import subprocess
 import time
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
@@ -56,14 +58,26 @@ def credentials_path() -> Path | None:
     return None
 
 
-def read_credentials() -> OAuthCredentials | None:
-    p = credentials_path()
-    if p is None:
+def _read_keychain_credentials() -> dict[str, Any] | None:
+    """Read Claude Code credentials from macOS Keychain (Claude Code 2.1+)."""
+    if platform.system() != "Darwin":
         return None
     try:
-        raw = json.loads(p.read_text())
-    except (OSError, json.JSONDecodeError):
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        return json.loads(result.stdout.strip())
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return None
+
+
+def _parse_credentials_payload(raw: dict[str, Any], source: Path | None = None) -> OAuthCredentials | None:
+    """Parse a credentials JSON object into OAuthCredentials."""
     payload = raw.get("claudeAiOauth") or raw.get("oauth") or raw
     access = payload.get("accessToken") or payload.get("access_token")
     if not access:
@@ -80,8 +94,28 @@ def read_credentials() -> OAuthCredentials | None:
         refresh_token=refresh,
         expires_at_ms=expires,
         subscription_type=payload.get("subscriptionType") or payload.get("subscription_type"),
-        source_path=p,
+        source_path=source,
     )
+
+
+def read_credentials() -> OAuthCredentials | None:
+    # Try file-based credentials first.
+    p = credentials_path()
+    if p is not None:
+        try:
+            raw = json.loads(p.read_text())
+            creds = _parse_credentials_payload(raw, source=p)
+            if creds:
+                return creds
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    # Fall back to macOS Keychain (Claude Code 2.1+).
+    keychain_raw = _read_keychain_credentials()
+    if keychain_raw:
+        return _parse_credentials_payload(keychain_raw, source=None)
+
+    return None
 
 
 def is_expired(creds: OAuthCredentials, *, leeway_seconds: int = 60) -> bool:
