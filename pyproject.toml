@@ -66,6 +66,11 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra -q"
 
+[tool.uv]
+# composio-core pins pillow which lacks Python 3.14 wheels at older versions.
+# Override to a version that ships pre-built wheels for 3.12–3.14.
+override-dependencies = ["pillow>=11.1.0"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = false

@@ -25,6 +25,7 @@ from .durability import DurableContext
 from .harness import HarnessOptions, run_agent
 from .loader import load_primitives
 from .memory import VectorMemory
+from .pipedream_tools import PipedreamIntegration, build_pipedream_tools
 from .store import Store
 
 logger = logging.getLogger(__name__)
@@ -73,12 +74,14 @@ class ExperimentRunner:
         store: Store,
         memory: VectorMemory,
         composio: ComposioIntegration,
+        pipedream: PipedreamIntegration | None = None,
         context_manager: ContextManager | None = None,
     ) -> None:
         self.config = config
         self.store = store
         self.memory = memory
         self.composio = composio
+        self.pipedream = pipedream or PipedreamIntegration(None)
         self.context_manager = context_manager or ContextManager(config.llm)
         self._primitives_cache: tuple[float, Primitives] | None = None
 
@@ -108,9 +111,11 @@ class ExperimentRunner:
             memory=self.memory,
             runner=self,
             play_ids=play_ids,
+            primitives=primitives,
         )
         composio = build_composio_tools(self.composio)
-        return custom + composio
+        pipedream = build_pipedream_tools(self.pipedream)
+        return custom + composio + pipedream
 
     # ---------- create / mutate ----------
 
@@ -452,7 +457,9 @@ def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None 
     if phase == "build":
         return (
             f"{base} Build the assets: prospect list, copy, scripts, or content. "
-            "Use composio_discover_tools / composio_execute_action for real integrations. "
+            "Bias toward doing the work yourself — draft copy, create lists, write scripts. "
+            "If you need to connect to external services (email, CRM, search), "
+            "Composio and Pipedream tools are available as optional accelerators. "
             "When complete, use request_approval(experiment_id, message) and wait — "
             "DO NOT transition to 'execute' yourself."
             f"{play_context}"
@@ -460,7 +467,8 @@ def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None 
     if phase == "execute":
         return (
             f"{base} Execute the play. Respect channel rules and rate limits. "
-            "Track what was sent and to whom. Use tools to actually deliver. "
+            "Track what was sent and to whom. Use every tool at your disposal to deliver — "
+            "Composio and Pipedream are available if you need external service connections. "
             "When execution is complete, transition to 'measure'."
             f"{play_context}"
         )

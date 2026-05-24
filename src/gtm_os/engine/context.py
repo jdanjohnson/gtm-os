@@ -74,9 +74,16 @@ def assemble_context(
             if play:
                 sections.append(_section(f"Play: {pid}", play))
     elif primitives.plays:
-        # Surface play names so the orchestrator can pick one when no experiment is loaded.
-        listing = "\n".join(f"- {pid}" for pid in sorted(primitives.plays.keys()))
-        sections.append(_section("Available plays", listing))
+        # Surface play catalog so the orchestrator knows what's available.
+        lines: list[str] = []
+        for pid in sorted(primitives.plays.keys()):
+            meta = primitives.play_meta.get(pid)
+            if meta and meta.description:
+                lines.append(f"- **{meta.name}** (`{pid}`, {meta.kind}): {meta.description}")
+            else:
+                lines.append(f"- `{pid}`")
+        listing = "\n".join(lines)
+        sections.append(_section("Available plays (use list_plays/get_play tools for details)", listing))
 
     # 7. Memories
     mem_list = list(relevant_memories or [])
@@ -113,8 +120,12 @@ def assemble_context(
                 "You are part of an autonomous GTM operating system.\n"
                 "- Stay strictly in the voice defined by Brand.\n"
                 "- Follow Rules without exception. If a rule blocks an action, surface it.\n"
-                "- When you can, use available tools to take real action: create experiments,\n"
-                "  save memories, schedule next runs, or discover/execute Composio integrations.\n"
+                "- BIAS TOWARD ACTION. Build the tools and assets you need yourself.\n"
+                "  Use available tools to take real action: create experiments,\n"
+                "  save memories, schedule next runs, draft copy, build prospect lists.\n"
+                "- Composio and Pipedream integrations are available as optional accelerators\n"
+                "  for connecting to external services (Gmail, Apollo, Slack, etc.).\n"
+                "  Use them when they help, but do not depend on them — work with what you have.\n"
                 "- Before the execute phase, always ask for human approval.\n"
                 "- Keep responses focused. Prefer concrete next steps over generic prose.\n"
             ),

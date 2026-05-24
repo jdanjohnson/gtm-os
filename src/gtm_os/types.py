@@ -45,6 +45,20 @@ class TriggersConfig:
 
 
 @dataclass
+class PlayMeta:
+    """Parsed frontmatter metadata for a single play."""
+
+    id: str = ""
+    name: str = ""
+    kind: str = "play"  # playbook | workflow | skill | tool | play
+    description: str = ""
+    category: str = ""
+    tags: list[str] = field(default_factory=list)
+    channel: str = "multi"
+    source_repo: str = ""
+
+
+@dataclass
 class Primitives:
     """All primitives loaded from disk."""
 
@@ -52,6 +66,7 @@ class Primitives:
     agents: dict[str, str] = field(default_factory=dict)
     rules: RulesConfig = field(default_factory=RulesConfig)
     plays: dict[str, str] = field(default_factory=dict)
+    play_meta: dict[str, PlayMeta] = field(default_factory=dict)
     memory_files: list[str] = field(default_factory=list)
     triggers: TriggersConfig = field(default_factory=TriggersConfig)
     base_path: str = ""
