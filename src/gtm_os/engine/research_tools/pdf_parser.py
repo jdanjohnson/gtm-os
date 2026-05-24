@@ -41,7 +41,7 @@ class PDFParserTool:
             "file": file_path,
             "text": text[:15000],
             "char_count": len(text),
-            "page_count": text.count("\n--- Page "),
+            "page_count": text.count("--- Page "),
         }
 
     def search(

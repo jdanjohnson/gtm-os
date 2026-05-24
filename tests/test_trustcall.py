@@ -66,6 +66,18 @@ def test_copy():
     assert doc["src"]["val"] == 42
 
 
+def test_move_nonexistent_source_raises():
+    doc = {"src": {}, "dst": {}}
+    with pytest.raises(PatchError, match="Key not found for move"):
+        apply_patch(doc, PatchOp(op="move", path="/dst/val", from_path="/src/missing"))
+
+
+def test_copy_nonexistent_source_raises():
+    doc = {"src": {}, "dst": {}}
+    with pytest.raises(PatchError, match="Key not found for copy"):
+        apply_patch(doc, PatchOp(op="copy", path="/dst/val", from_path="/src/missing"))
+
+
 def test_test_op_pass():
     doc = {"x": 5}
     apply_patch(doc, PatchOp(op="test", path="/x", value=5))

@@ -149,9 +149,17 @@ def apply_patch(document: dict[str, Any], patch: PatchOp) -> None:
         # Remove from source.
         src_parent, src_key = _resolve_pointer(document, patch.from_path)
         if isinstance(src_parent, dict):
+            if src_key not in src_parent:
+                raise PatchError(f"Key not found for move: {patch.from_path}")
             value = src_parent.pop(src_key)
         elif isinstance(src_parent, list):
-            value = src_parent.pop(int(src_key))
+            try:
+                idx = int(src_key)
+            except ValueError as exc:
+                raise PatchError(f"Expected array index, got: {src_key}") from exc
+            if idx < 0 or idx >= len(src_parent):
+                raise PatchError(f"Array index out of range: {idx}")
+            value = src_parent.pop(idx)
         else:
             raise PatchError(f"Cannot move from {type(src_parent).__name__}")
         # Add to destination.
@@ -162,9 +170,17 @@ def apply_patch(document: dict[str, Any], patch: PatchOp) -> None:
             raise PatchError("copy requires 'from' path")
         src_parent, src_key = _resolve_pointer(document, patch.from_path)
         if isinstance(src_parent, dict):
+            if src_key not in src_parent:
+                raise PatchError(f"Key not found for copy: {patch.from_path}")
             value = copy.deepcopy(src_parent[src_key])
         elif isinstance(src_parent, list):
-            value = copy.deepcopy(src_parent[int(src_key)])
+            try:
+                idx = int(src_key)
+            except ValueError as exc:
+                raise PatchError(f"Expected array index, got: {src_key}") from exc
+            if idx < 0 or idx >= len(src_parent):
+                raise PatchError(f"Array index out of range: {idx}")
+            value = copy.deepcopy(src_parent[idx])
         else:
             raise PatchError(f"Cannot copy from {type(src_parent).__name__}")
         apply_patch(document, PatchOp(op="add", path=patch.path, value=value))
