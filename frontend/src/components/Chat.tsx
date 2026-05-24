@@ -9,6 +9,8 @@ interface Props {
   experimentId: string | null;
   primitives: PrimitivesSummary | null;
   experimentNames?: Record<string, string>;
+  pendingMessage?: string | null;
+  onPendingMessageConsumed?: () => void;
   onSwitchExperiment?: (id: string | null) => void;
 }
 
@@ -42,6 +44,8 @@ export default function Chat({
   experimentId,
   primitives,
   experimentNames,
+  pendingMessage,
+  onPendingMessageConsumed,
   onSwitchExperiment,
 }: Props) {
   const sessionsRef = useRef<Map<string, ChatSession>>(new Map());
@@ -104,12 +108,13 @@ export default function Chat({
     });
   }, [messages]);
 
-  const send = useCallback(async () => {
-    if (!input.trim() || streaming) return;
+  const send = useCallback(async (overrideMessage?: string) => {
+    const text = overrideMessage ?? input;
+    if (!text.trim() || streaming) return;
     const userMsg: UIMessage = {
       id: `u-${Date.now()}`,
       role: "user",
-      content: input,
+      content: text,
     };
     const placeholder: UIMessage = {
       id: `a-${Date.now()}`,
@@ -118,8 +123,8 @@ export default function Chat({
       pending: true,
     };
     setMessages((m) => [...m, userMsg, placeholder]);
-    const userText = input;
-    setInput("");
+    const userText = text;
+    if (!overrideMessage) setInput("");
     setStreaming(true);
 
     const controller = new AbortController();
@@ -225,6 +230,13 @@ export default function Chat({
       setStreaming(false);
     }
   }, [input, streaming, threadId, experimentId, agent]);
+
+  useEffect(() => {
+    if (pendingMessage && !streaming) {
+      onPendingMessageConsumed?.();
+      send(pendingMessage);
+    }
+  }, [pendingMessage, streaming, send, onPendingMessageConsumed]);
 
   const stop = () => {
     abortRef.current?.abort();
@@ -373,7 +385,7 @@ export default function Chat({
             </button>
           ) : (
             <button
-              onClick={send}
+              onClick={() => send()}
               disabled={!input.trim()}
               className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-40"
             >

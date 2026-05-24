@@ -3,12 +3,16 @@ import {
   AppInfo,
   Connection,
   Integration,
+  NoKeyTool,
+  ToolKeyInfo,
   disconnectApp,
   getIntegrations,
+  getToolKeys,
   initiateConnect,
   listApps,
   listConnections,
   updateIntegrationKeys,
+  updateToolKeys,
   getHealth,
 } from "../lib/api";
 
@@ -35,9 +39,17 @@ export default function IntegrationsView() {
   const [keySaving, setKeySaving] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
 
+  /* ── research tool keys ─────────────────────────────────────────────────── */
+  const [toolKeys, setToolKeys] = useState<ToolKeyInfo[]>([]);
+  const [noKeyTools, setNoKeyTools] = useState<NoKeyTool[]>([]);
+  const [toolKeyDrafts, setToolKeyDrafts] = useState<Record<string, string>>({});
+  const [toolKeySaving, setToolKeySaving] = useState(false);
+  const [toolKeySaved, setToolKeySaved] = useState(false);
+
   /* ── app catalog ───────────────────────────────────────────────────────── */
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [appsLoading, setAppsLoading] = useState(false);
+  const [appsError, setAppsError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
 
@@ -64,15 +76,28 @@ export default function IntegrationsView() {
         }
       })
       .catch(() => null);
+    getToolKeys()
+      .then((r) => {
+        setToolKeys(r.tool_keys);
+        setNoKeyTools(r.no_key_tools);
+      })
+      .catch(() => null);
   }, []);
 
   /* ── load apps when tab switches or search changes ─────────────────────── */
   useEffect(() => {
     if (!composioConfigured) return;
     setAppsLoading(true);
+    setAppsError(null);
     listApps(search, category === "All" ? "" : category)
-      .then((r) => setApps(r.apps))
-      .catch(() => setApps([]))
+      .then((r) => {
+        setApps(r.apps ?? []);
+        if (r.error) setAppsError(r.error);
+      })
+      .catch((err) => {
+        setApps([]);
+        setAppsError(String(err));
+      })
       .finally(() => setAppsLoading(false));
   }, [composioConfigured, search, category]);
 
@@ -121,13 +146,36 @@ export default function IntegrationsView() {
         setComposioConfigured(true);
         setTab("catalog");
       }
-      void hRes; // health used elsewhere
+      void hRes;
     } catch (e) {
       console.error("Failed to save keys:", e);
     } finally {
       setKeySaving(false);
     }
   }, [keyDrafts]);
+
+  /* ── save research tool keys ────────────────────────────────────────────── */
+  const saveToolKeys = useCallback(async () => {
+    setToolKeySaving(true);
+    try {
+      const payload: Record<string, string> = {};
+      for (const [name, val] of Object.entries(toolKeyDrafts)) {
+        if (name === "serper") payload.serper_api_key = val;
+        if (name === "brave") payload.brave_search_api_key = val;
+        if (name === "youtube") payload.youtube_api_key = val;
+      }
+      await updateToolKeys(payload);
+      setToolKeyDrafts({});
+      setToolKeySaved(true);
+      const r = await getToolKeys();
+      setToolKeys(r.tool_keys);
+      setNoKeyTools(r.no_key_tools);
+    } catch (e) {
+      console.error("Failed to save tool keys:", e);
+    } finally {
+      setToolKeySaving(false);
+    }
+  }, [toolKeyDrafts]);
 
   /* ── connect to an app ─────────────────────────────────────────────────── */
   const handleConnect = useCallback(async (slug: string) => {
@@ -201,37 +249,95 @@ export default function IntegrationsView() {
 
         {/* ── Setup Tab ─────────────────────────────────────────────────── */}
         {tab === "setup" && (
-          <div className="space-y-4">
-            <p className="text-sm text-[#A1A1AA]">
-              Enter your platform API keys to unlock the integration catalog.
-              Composio provides 250+ app connections; Pipedream adds 2,400+
-              pre-built actions.
-            </p>
-            {platforms.map((p) => (
-              <PlatformKeyCard
-                key={p.name}
-                platform={p}
-                draft={keyDrafts[p.name] ?? ""}
-                onDraftChange={(val) => {
-                  setKeyDrafts((prev) => ({ ...prev, [p.name]: val }));
-                  setKeySaved(false);
-                }}
-              />
-            ))}
-            {Object.keys(keyDrafts).length > 0 && (
-              <button
-                onClick={savePlatformKeys}
-                disabled={keySaving}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {keySaving ? "Saving…" : "Save Keys"}
-              </button>
-            )}
-            {keySaved && (
-              <span className="text-xs text-emerald-400">
-                Keys saved & reloaded
-              </span>
-            )}
+          <div className="space-y-6">
+            {/* Platform Keys */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[#A1A1AA] uppercase tracking-wider mb-1">Platform Keys</h3>
+                <p className="text-xs text-[#777]">
+                  Composio provides 250+ app connections; Pipedream adds 2,400+ pre-built actions.
+                </p>
+              </div>
+              {platforms.map((p) => (
+                <PlatformKeyCard
+                  key={p.name}
+                  platform={p}
+                  draft={keyDrafts[p.name] ?? ""}
+                  onDraftChange={(val) => {
+                    setKeyDrafts((prev) => ({ ...prev, [p.name]: val }));
+                    setKeySaved(false);
+                  }}
+                />
+              ))}
+              {Object.keys(keyDrafts).length > 0 && (
+                <button
+                  onClick={savePlatformKeys}
+                  disabled={keySaving}
+                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {keySaving ? "Saving…" : "Save Platform Keys"}
+                </button>
+              )}
+              {keySaved && (
+                <span className="text-xs text-emerald-400">
+                  Keys saved & reloaded
+                </span>
+              )}
+            </div>
+
+            {/* Research Tool Keys */}
+            <div className="space-y-4 border-t border-[#2A2A2A] pt-6">
+              <div>
+                <h3 className="text-sm font-semibold text-[#A1A1AA] uppercase tracking-wider mb-1">Research Tool Keys</h3>
+                <p className="text-xs text-[#777]">
+                  API keys for research tools used during experiments. Tools without keys listed below work out of the box.
+                </p>
+              </div>
+              {toolKeys.map((tk) => (
+                <ToolKeyCard
+                  key={tk.name}
+                  toolKey={tk}
+                  draft={toolKeyDrafts[tk.name] ?? ""}
+                  onDraftChange={(val) => {
+                    setToolKeyDrafts((prev) => ({ ...prev, [tk.name]: val }));
+                    setToolKeySaved(false);
+                  }}
+                />
+              ))}
+              {toolKeys.length === 0 && (
+                <p className="text-xs text-[#555] italic">Loading tool keys…</p>
+              )}
+              {Object.keys(toolKeyDrafts).length > 0 && (
+                <button
+                  onClick={saveToolKeys}
+                  disabled={toolKeySaving}
+                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {toolKeySaving ? "Saving…" : "Save Research Keys"}
+                </button>
+              )}
+              {toolKeySaved && (
+                <span className="text-xs text-emerald-400">
+                  Keys saved & reloaded
+                </span>
+              )}
+              {noKeyTools.length > 0 && (
+                <div className="border-t border-[#2A2A2A] pt-3">
+                  <p className="mb-2 text-xs text-[#A1A1AA] uppercase tracking-wider">No Key Required</p>
+                  <div className="flex flex-wrap gap-2">
+                    {noKeyTools.map((t) => (
+                      <span
+                        key={t.name}
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-900/30 px-2.5 py-0.5 text-[11px] text-emerald-400"
+                      >
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        {t.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -297,6 +403,15 @@ export default function IntegrationsView() {
                 {appsLoading ? (
                   <div className="py-12 text-center text-sm text-[#A1A1AA]">
                     Loading apps…
+                  </div>
+                ) : appsError ? (
+                  <div className="rounded-lg border border-red-900/50 bg-red-900/10 p-4 text-center">
+                    <p className="text-sm text-red-400">
+                      Failed to load apps: {appsError}
+                    </p>
+                    <p className="mt-1 text-xs text-[#777]">
+                      Check your Composio API key or try refreshing.
+                    </p>
                   </div>
                 ) : apps.length === 0 ? (
                   <div className="py-12 text-center text-sm text-[#A1A1AA]">
@@ -548,6 +663,63 @@ function PlatformKeyCard({
         >
           {showKey ? "Hide" : "Show"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ToolKeyCard({
+  toolKey,
+  draft,
+  onDraftChange,
+}: {
+  toolKey: ToolKeyInfo;
+  draft: string;
+  onDraftChange: (val: string) => void;
+}) {
+  const [showKey, setShowKey] = useState(false);
+  return (
+    <div className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{toolKey.label}</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              toolKey.configured
+                ? "bg-emerald-900/50 text-emerald-400"
+                : "bg-amber-900/50 text-amber-400"
+            }`}
+          >
+            {toolKey.configured ? "Active" : "Missing"}
+          </span>
+        </div>
+        <span className="text-[10px] text-[#555]">
+          Used by: {toolKey.required_by.join(", ")}
+        </span>
+      </div>
+      <p className="text-xs text-[#777]">{toolKey.description}</p>
+      <div>
+        <label className="mb-1 block text-xs text-[#A1A1AA]">
+          {toolKey.env_var}
+          {toolKey.masked_key && (
+            <span className="ml-2 text-[#555]">Current: {toolKey.masked_key}</span>
+          )}
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type={showKey ? "text" : "password"}
+            value={draft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            placeholder={toolKey.configured ? "Enter new key to update…" : "Paste your API key…"}
+            className="flex-1 rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#FAFAFA] placeholder-[#555] outline-none focus:border-emerald-600 transition-colors font-mono"
+          />
+          <button
+            onClick={() => setShowKey((p) => !p)}
+            className="rounded px-2 py-1 text-xs text-[#A1A1AA] hover:bg-[#2A2A2A] transition-colors"
+          >
+            {showKey ? "Hide" : "Show"}
+          </button>
+        </div>
       </div>
     </div>
   );

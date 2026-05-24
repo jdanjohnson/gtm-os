@@ -336,19 +336,25 @@ async def list_apps(
             resp.raise_for_status()
             data = resp.json()
 
-        items = data.get("items", [])
+        # Composio v3 may wrap in "items", or return a bare list, or use "toolkits"
+        if isinstance(data, list):
+            items = data
+        else:
+            items = data.get("items") or data.get("toolkits") or data.get("tools") or []
         apps = [
             {
-                "slug": t.get("slug", ""),
-                "name": t.get("name", ""),
-                "description": t.get("description", ""),
-                "logo": t.get("logo", ""),
-                "categories": t.get("categories", []),
+                "slug": t.get("slug") or t.get("key") or t.get("appId") or "",
+                "name": t.get("name") or t.get("display_name") or t.get("slug") or "",
+                "description": t.get("description") or "",
+                "logo": t.get("logo") or t.get("icon") or t.get("meta", {}).get("logo", "") if isinstance(t, dict) else "",
+                "categories": t.get("categories") or [],
                 "auth_schemes": [
-                    s.get("type", "") for s in t.get("auth_schemes", [])
+                    (s.get("type", "") if isinstance(s, dict) else str(s))
+                    for s in (t.get("auth_schemes") or t.get("authSchemes") or [])
                 ],
             }
             for t in items
+            if isinstance(t, dict)
         ]
         return {"apps": apps}
     except httpx.HTTPStatusError as exc:

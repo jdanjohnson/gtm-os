@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrandIdentity, Integration, NoKeyTool, ToolKeyInfo, getBrand, getHealth, getIntegrations, getToolKeys, updateBrand, updateIntegrationKeys, updateToolKeys } from "../lib/api";
+import { BrandIdentity, getBrand, getHealth, updateBrand } from "../lib/api";
 
 const SOCIAL_KEYS = ["twitter", "linkedin", "instagram", "youtube", "tiktok", "github"] as const;
 
@@ -24,30 +24,14 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [intKeyDrafts, setIntKeyDrafts] = useState<Record<string, string>>({});
-  const [intSaving, setIntSaving] = useState(false);
-  const [intSaved, setIntSaved] = useState(false);
-  const [toolKeys, setToolKeys] = useState<ToolKeyInfo[]>([]);
-  const [noKeyTools, setNoKeyTools] = useState<NoKeyTool[]>([]);
-  const [toolKeyDrafts, setToolKeyDrafts] = useState<Record<string, string>>({});
-  const [toolKeySaving, setToolKeySaving] = useState(false);
-  const [toolKeySaved, setToolKeySaved] = useState(false);
+
 
   useEffect(() => {
     getHealth().then(setHealth).catch(() => null);
     getBrand()
       .then((b) => setBrand(b))
       .catch(() => null);
-    getIntegrations()
-      .then((r) => setIntegrations(r.integrations))
-      .catch(() => null);
-    getToolKeys()
-      .then((r) => {
-        setToolKeys(r.tool_keys);
-        setNoKeyTools(r.no_key_tools);
-      })
-      .catch(() => null);
+
   }, []);
 
   const update = useCallback(
@@ -86,49 +70,7 @@ export default function Settings() {
     }
   }, [brand]);
 
-  const saveIntegrationKeys = useCallback(async () => {
-    setIntSaving(true);
-    try {
-      const payload: Record<string, string> = {};
-      for (const [name, val] of Object.entries(intKeyDrafts)) {
-        if (name === "composio") payload.composio_api_key = val;
-        if (name === "pipedream") payload.pipedream_api_key = val;
-      }
-      await updateIntegrationKeys(payload);
-      setIntKeyDrafts({});
-      setIntSaved(true);
-      // Refresh integrations and health status.
-      const [intRes, hRes] = await Promise.all([getIntegrations(), getHealth()]);
-      setIntegrations(intRes.integrations);
-      setHealth(hRes);
-    } catch (e) {
-      console.error("Failed to save integration keys:", e);
-    } finally {
-      setIntSaving(false);
-    }
-  }, [intKeyDrafts]);
 
-  const saveToolKeys = useCallback(async () => {
-    setToolKeySaving(true);
-    try {
-      const payload: Record<string, string> = {};
-      for (const [name, val] of Object.entries(toolKeyDrafts)) {
-        if (name === "serper") payload.serper_api_key = val;
-        if (name === "brave") payload.brave_search_api_key = val;
-        if (name === "youtube") payload.youtube_api_key = val;
-      }
-      await updateToolKeys(payload);
-      setToolKeyDrafts({});
-      setToolKeySaved(true);
-      const r = await getToolKeys();
-      setToolKeys(r.tool_keys);
-      setNoKeyTools(r.no_key_tools);
-    } catch (e) {
-      console.error("Failed to save tool keys:", e);
-    } finally {
-      setToolKeySaving(false);
-    }
-  }, [toolKeyDrafts]);
 
   const addListItem = useCallback(
     (field: "voice" | "avoid" | "prefer") => {
@@ -185,89 +127,6 @@ export default function Settings() {
           <InfoRow label="Scheduler" value={health?.scheduler_running ? "Running" : "Stopped"} />
           <InfoRow label="Primitives" value={health?.primitives_dir ?? "—"} mono small />
         </div>
-      </Section>
-
-      {/* Integrations */}
-      <Section title="Integrations">
-        <div className="space-y-4">
-          {integrations.map((int_) => (
-            <IntegrationCard
-              key={int_.name}
-              integration={int_}
-              draft={intKeyDrafts[int_.name] ?? ""}
-              onDraftChange={(val) => {
-                setIntKeyDrafts((prev) => ({ ...prev, [int_.name]: val }));
-                setIntSaved(false);
-              }}
-            />
-          ))}
-          {integrations.length === 0 && (
-            <p className="text-xs text-[#555] italic">Loading integrations…</p>
-          )}
-          {Object.keys(intKeyDrafts).length > 0 && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={saveIntegrationKeys}
-                disabled={intSaving}
-                className="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {intSaving ? "Saving…" : "Save Keys"}
-              </button>
-            </div>
-          )}
-          {intSaved && <span className="text-xs text-emerald-400">Keys saved & reloaded</span>}
-        </div>
-      </Section>
-
-      {/* Research Tool Keys */}
-      <Section title="Research Tool Keys">
-        <p className="mb-3 text-xs text-[#777]">
-          API keys for research tools used during experiments. Tools without keys listed below work out of the box.
-        </p>
-        <div className="space-y-3">
-          {toolKeys.map((tk) => (
-            <ToolKeyCard
-              key={tk.name}
-              toolKey={tk}
-              draft={toolKeyDrafts[tk.name] ?? ""}
-              onDraftChange={(val) => {
-                setToolKeyDrafts((prev) => ({ ...prev, [tk.name]: val }));
-                setToolKeySaved(false);
-              }}
-            />
-          ))}
-          {toolKeys.length === 0 && (
-            <p className="text-xs text-[#555] italic">Loading tool keys…</p>
-          )}
-          {Object.keys(toolKeyDrafts).length > 0 && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={saveToolKeys}
-                disabled={toolKeySaving}
-                className="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {toolKeySaving ? "Saving…" : "Save Keys"}
-              </button>
-            </div>
-          )}
-          {toolKeySaved && <span className="text-xs text-emerald-400">Keys saved & reloaded</span>}
-        </div>
-        {noKeyTools.length > 0 && (
-          <div className="mt-4 border-t border-[#2A2A2A] pt-3">
-            <p className="mb-2 text-xs text-[#A1A1AA] uppercase tracking-wider">No Key Required</p>
-            <div className="flex flex-wrap gap-2">
-              {noKeyTools.map((t) => (
-                <span
-                  key={t.name}
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-900/30 px-2.5 py-0.5 text-[11px] text-emerald-400"
-                >
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  {t.label}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </Section>
 
       {/* Brand Identity */}
@@ -445,133 +304,4 @@ function EditableList({
   );
 }
 
-function ToolKeyCard({
-  toolKey,
-  draft,
-  onDraftChange,
-}: {
-  toolKey: ToolKeyInfo;
-  draft: string;
-  onDraftChange: (val: string) => void;
-}) {
-  const [showKey, setShowKey] = useState(false);
 
-  return (
-    <div className="rounded-md border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#FAFAFA]">{toolKey.label}</span>
-          <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              toolKey.configured
-                ? "bg-emerald-900/50 text-emerald-400"
-                : "bg-amber-900/50 text-amber-400"
-            }`}
-          >
-            {toolKey.configured ? "Active" : "Missing"}
-          </span>
-        </div>
-        <span className="text-[10px] text-[#555]">
-          Used by: {toolKey.required_by.join(", ")}
-        </span>
-      </div>
-      <p className="text-xs text-[#777]">{toolKey.description}</p>
-      <div>
-        <label className="mb-1 block text-xs text-[#A1A1AA]">
-          {toolKey.env_var}
-          {toolKey.masked_key && (
-            <span className="ml-2 text-[#555]">Current: {toolKey.masked_key}</span>
-          )}
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            type={showKey ? "text" : "password"}
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            placeholder={toolKey.configured ? "Enter new key to update…" : "Paste your API key…"}
-            className="flex-1 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#FAFAFA] placeholder-[#555] outline-none focus:border-emerald-600 transition-colors font-mono"
-          />
-          <button
-            onClick={() => setShowKey((p) => !p)}
-            className="rounded px-2 py-1 text-xs text-[#A1A1AA] hover:bg-[#2A2A2A] transition-colors"
-          >
-            {showKey ? "Hide" : "Show"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function IntegrationCard({
-  integration,
-  draft,
-  onDraftChange,
-}: {
-  integration: Integration;
-  draft: string;
-  onDraftChange: (val: string) => void;
-}) {
-  const [showKey, setShowKey] = useState(false);
-
-  return (
-    <div className="rounded-md border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#FAFAFA]">{integration.label}</span>
-          <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              integration.configured
-                ? "bg-emerald-900/50 text-emerald-400"
-                : "bg-[#2A2A2A] text-[#777]"
-            }`}
-          >
-            {integration.configured ? "Connected" : "Not configured"}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href={integration.docs_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[10px] text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
-          >
-            Docs
-          </a>
-          <a
-            href={integration.dashboard_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[10px] text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
-          >
-            Dashboard
-          </a>
-        </div>
-      </div>
-      <p className="text-xs text-[#777]">{integration.description}</p>
-      <div>
-        <label className="mb-1 block text-xs text-[#A1A1AA]">
-          API Key ({integration.env_var})
-          {integration.masked_key && (
-            <span className="ml-2 text-[#555]">Current: {integration.masked_key}</span>
-          )}
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            type={showKey ? "text" : "password"}
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            placeholder={integration.configured ? "Enter new key to update…" : "Paste your API key…"}
-            className="flex-1 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#FAFAFA] placeholder-[#555] outline-none focus:border-emerald-600 transition-colors font-mono"
-          />
-          <button
-            onClick={() => setShowKey((p) => !p)}
-            className="rounded px-2 py-1 text-xs text-[#A1A1AA] hover:bg-[#2A2A2A] transition-colors"
-          >
-            {showKey ? "Hide" : "Show"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
