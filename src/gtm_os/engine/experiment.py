@@ -17,6 +17,7 @@ from typing import Any
 
 from ..config import Config
 from ..types import Experiment, Primitives
+from .composio_router import ComposioRouter, build_router_tools
 from .composio_tools import ComposioIntegration, build_composio_tools
 from .context import assemble_context
 from .context_manager import ContextManager
@@ -25,6 +26,8 @@ from .durability import DurableContext
 from .harness import HarnessOptions, run_agent
 from .loader import load_primitives
 from .memory import VectorMemory
+from .research import build_research_tools
+from .sandbox import build_sandbox_tools
 from .store import Store
 
 logger = logging.getLogger(__name__)
@@ -78,6 +81,10 @@ class ExperimentRunner:
         self.config = config
         self.store = store
         self.memory = memory
+        self.router = ComposioRouter(
+            composio,
+            skills_dir=config.data_dir / "skills",
+        )
         self.composio = composio
         self.context_manager = context_manager or ContextManager(config.llm)
         self._primitives_cache: tuple[float, Primitives] | None = None
@@ -110,7 +117,10 @@ class ExperimentRunner:
             play_ids=play_ids,
         )
         composio = build_composio_tools(self.composio)
-        return custom + composio
+        router = build_router_tools(self.router)
+        research = build_research_tools()
+        sandbox = build_sandbox_tools(self.config.data_dir)
+        return custom + composio + router + research + sandbox
 
     # ---------- create / mutate ----------
 
