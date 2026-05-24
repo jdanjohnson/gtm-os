@@ -1,0 +1,41 @@
+# GTM-OS configuration.
+# Copy to gtm-os.config.yaml and fill in your keys.
+
+# Where primitives live (relative to project root or absolute).
+primitives_dir: ./primitives
+
+# Where the SQLite database lives.
+data_dir: ./data
+
+# Server settings.
+server:
+  host: 127.0.0.1
+  port: 3000
+
+# Scheduler settings.
+scheduler:
+  enabled: true
+  poll_interval_seconds: 60
+  max_consecutive_failures: 3
+
+# Default LLM provider/model.
+# Any litellm-compatible model name works (e.g. openai/gpt-4o, anthropic/claude-3-5-sonnet-20241022, ollama/llama3.1).
+llm:
+  model: openai/gpt-4o-mini
+  embedding_model: openai/text-embedding-3-small
+  temperature: 0.4
+  max_tokens: 4096
+  request_timeout_seconds: 120
+
+# Token budgets.
+budgets:
+  default_experiment_token_budget: 200000
+  context_soft_trim_ratio: 0.30
+  context_hard_clear_ratio: 0.50
+
+# API keys are read from environment variables by default.
+# You can also set them here (NOT recommended — commit gtm-os.config.yaml is gitignored).
+# api_keys:
+#   openai: sk-...
+#   anthropic: sk-ant-...
+#   composio: ...

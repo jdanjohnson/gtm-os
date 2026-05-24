@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.prose-chat {
+  @apply text-sm leading-6;
+}
+
+.prose-chat p {
+  @apply mb-2 last:mb-0;
+}
+
+.prose-chat ul,
+.prose-chat ol {
+  @apply pl-5 list-disc mb-2;
+}
+
+.prose-chat ol {
+  @apply list-decimal;
+}
+
+.prose-chat code {
+  @apply rounded bg-slate-800/80 px-1 py-0.5 text-xs;
+}
+
+.prose-chat pre {
+  @apply rounded bg-slate-900/80 p-3 text-xs overflow-x-auto;
+}
+
+.prose-chat a {
+  @apply text-emerald-300 underline underline-offset-2;
+}

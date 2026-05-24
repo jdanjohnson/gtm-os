@@ -1,0 +1,39 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+src/gtm_os/server/frontend_dist/*
+!src/gtm_os/server/frontend_dist/.gitkeep
+
+# Local data
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.sqlite*
+*.log
+
+# Local config (template lives in gtm-os.config.yaml.example)
+gtm-os.config.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
