@@ -147,9 +147,11 @@ def load_config(config_path: Path | None = None) -> Config:
         context_hard_clear_ratio=float(budgets_raw.get("context_hard_clear_ratio", 0.50)),
     )
 
-    composio_key = merged.get("api_keys", {}).get("composio") if isinstance(
-        merged.get("api_keys"), dict
-    ) else None
+    composio_key = (
+        merged.get("api_keys", {}).get("composio")
+        if isinstance(merged.get("api_keys"), dict)
+        else None
+    )
     composio_key = composio_key or os.environ.get("COMPOSIO_API_KEY")
 
     return Config(

@@ -140,6 +140,13 @@ class Store:
         with self._lock, self._conn:
             for stmt in SCHEMA_STATEMENTS:
                 self._conn.execute(stmt)
+        # WS6: Initialize sqlite-vec if available.
+        try:
+            from .vec_search import init_vec_table
+
+            init_vec_table(self._conn)
+        except Exception:
+            pass
 
     def close(self) -> None:
         with self._lock:
@@ -185,9 +192,7 @@ class Store:
 
     def get_experiment(self, exp_id: str) -> Experiment | None:
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM experiments WHERE id = ?", (exp_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM experiments WHERE id = ?", (exp_id,)).fetchone()
         return _row_to_experiment(row) if row else None
 
     def list_experiments(
@@ -237,9 +242,7 @@ class Store:
         params.append(_now())
         params.append(exp_id)
         with self._lock, self._conn:
-            self._conn.execute(
-                f"UPDATE experiments SET {', '.join(sets)} WHERE id = ?", params
-            )
+            self._conn.execute(f"UPDATE experiments SET {', '.join(sets)} WHERE id = ?", params)
         return self.get_experiment(exp_id)
 
     def add_experiment_tokens(self, exp_id: str, tokens: int) -> None:
@@ -334,9 +337,7 @@ class Store:
 
     # ---------- checkpoints ----------
 
-    def save_checkpoint(
-        self, experiment_id: str, run_id: str, step_name: str, result: Any
-    ) -> None:
+    def save_checkpoint(self, experiment_id: str, run_id: str, step_name: str, result: Any) -> None:
         with self._lock, self._conn:
             self._conn.execute(
                 """
@@ -465,9 +466,7 @@ class Store:
 
     def get_memory(self, memory_id: str) -> Memory | None:
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM memory WHERE id = ?", (memory_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM memory WHERE id = ?", (memory_id,)).fetchone()
         return _row_to_memory(row) if row else None
 
     def all_memory_rows(self, type_filter: str | None = None) -> Iterable[sqlite3.Row]:
@@ -593,9 +592,7 @@ class Store:
             return self.get_schedule(schedule_id)
         params.append(schedule_id)
         with self._lock, self._conn:
-            self._conn.execute(
-                f"UPDATE schedules SET {', '.join(sets)} WHERE id = ?", params
-            )
+            self._conn.execute(f"UPDATE schedules SET {', '.join(sets)} WHERE id = ?", params)
         return self.get_schedule(schedule_id)
 
     def delete_schedule(self, schedule_id: str) -> None:

@@ -38,9 +38,7 @@ def _next_run_from_cron(expr: str) -> str:
 
 
 def _next_run_from_interval(seconds: int) -> str:
-    return (datetime.now(UTC) + timedelta(seconds=int(seconds))).isoformat(
-        timespec="seconds"
-    )
+    return (datetime.now(UTC) + timedelta(seconds=int(seconds))).isoformat(timespec="seconds")
 
 
 def build_custom_tools(
@@ -142,9 +140,7 @@ def build_custom_tools(
             return {"ok": False, "error": "not_found"}
         return {"ok": True, "experiment_id": exp.id, "phase": exp.phase}
 
-    async def _list_experiments(
-        phase_filter: str | None = None, limit: int = 50
-    ) -> dict[str, Any]:
+    async def _list_experiments(phase_filter: str | None = None, limit: int = 50) -> dict[str, Any]:
         exps = store.list_experiments(phase=phase_filter, limit=int(limit))
         return {
             "ok": True,
@@ -219,9 +215,7 @@ def build_custom_tools(
         store.update_experiment(experiment_id, schedule_id=sched.id)
         return {"ok": True, "schedule_id": sched.id, "next_run_at": sched.next_run_at}
 
-    async def _request_approval(
-        experiment_id: str, message: str
-    ) -> dict[str, Any]:
+    async def _request_approval(experiment_id: str, message: str) -> dict[str, Any]:
         # Pause the experiment and surface a message; UI will display the pending approval.
         exp = store.update_experiment(experiment_id, phase="paused")
         store.add_message(
@@ -243,7 +237,9 @@ def build_custom_tools(
 
     play_param = {
         "type": "array",
-        "items": {"type": "string"} if not play_id_enum else {"type": "string", "enum": play_id_enum},
+        "items": {"type": "string"}
+        if not play_id_enum
+        else {"type": "string", "enum": play_id_enum},
         "description": "Play IDs (subdirectories of primitives/plays/).",
     }
 

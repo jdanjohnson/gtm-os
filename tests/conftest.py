@@ -62,9 +62,7 @@ def primitives_tree(tmp_path: Path) -> Path:
     (root / "rules" / "phase-rules" / "design.md").write_text(
         "# design rules\n\nSearch memory first.\n"
     )
-    (root / "rules" / "channel-rules" / "email.md").write_text(
-        "# email rules\n\nNo HTML.\n"
-    )
+    (root / "rules" / "channel-rules" / "email.md").write_text("# email rules\n\nNo HTML.\n")
     (root / "plays" / "demo" / "PLAY.md").write_text(
         "---\nid: demo\nchannel: email\n---\n# Demo play\n\nSend an email.\n"
     )

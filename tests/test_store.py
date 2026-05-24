@@ -34,9 +34,7 @@ def test_runs_and_tokens(store: Store):
     exp = store.create_experiment(name="run-exp")
     run = store.start_run(exp.id, "design", {"agent": "researcher"})
     assert run.status == "running"
-    store.finish_run(
-        run.id, status="completed", output={"message": "done"}, tokens_used=123
-    )
+    store.finish_run(run.id, status="completed", output={"message": "done"}, tokens_used=123)
     store.add_experiment_tokens(exp.id, 123)
     reloaded = store.get_experiment(exp.id)
     assert reloaded.tokens_used == 123
@@ -61,12 +59,8 @@ def test_memory_insert_and_list(store: Store):
 
 
 def test_schedule_insert_due(store: Store):
-    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat(
-        timespec="seconds"
-    )
-    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat(
-        timespec="seconds"
-    )
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat(timespec="seconds")
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat(timespec="seconds")
     sched_past = Schedule(
         id=_new_id(),
         experiment_id=None,

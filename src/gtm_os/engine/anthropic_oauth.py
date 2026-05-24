@@ -79,8 +79,7 @@ def read_credentials() -> OAuthCredentials | None:
         access_token=access,
         refresh_token=refresh,
         expires_at_ms=expires,
-        subscription_type=payload.get("subscriptionType")
-        or payload.get("subscription_type"),
+        subscription_type=payload.get("subscriptionType") or payload.get("subscription_type"),
         source_path=p,
     )
 
@@ -109,9 +108,7 @@ async def refresh_credentials(creds: OAuthCredentials) -> OAuthCredentials | Non
     new_refresh = data.get("refresh_token") or data.get("refreshToken") or creds.refresh_token
     expires_in = data.get("expires_in") or data.get("expiresIn")
     expires_at_ms = (
-        int(time.time() * 1000) + int(expires_in) * 1000
-        if expires_in
-        else creds.expires_at_ms
+        int(time.time() * 1000) + int(expires_in) * 1000 if expires_in else creds.expires_at_ms
     )
     if not new_access:
         return None
@@ -128,8 +125,8 @@ async def refresh_credentials(creds: OAuthCredentials) -> OAuthCredentials | Non
     if creds.source_path:
         try:
             raw = json.loads(creds.source_path.read_text())
-            payload_key = "claudeAiOauth" if "claudeAiOauth" in raw else (
-                "oauth" if "oauth" in raw else None
+            payload_key = (
+                "claudeAiOauth" if "claudeAiOauth" in raw else ("oauth" if "oauth" in raw else None)
             )
             if payload_key:
                 raw[payload_key]["accessToken"] = new_access
@@ -166,7 +163,9 @@ def split_oauth_model(model: str) -> str:
 # ---------- Translation between OpenAI-style and Anthropic-style ----------
 
 
-def _translate_tools_to_anthropic(tools: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+def _translate_tools_to_anthropic(
+    tools: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]] | None:
     if not tools:
         return None
     out: list[dict[str, Any]] = []
@@ -197,9 +196,7 @@ def _translate_messages_to_anthropic(
         if role == "system":
             content = m.get("content") or ""
             if isinstance(content, list):
-                content = "\n".join(
-                    c.get("text", "") for c in content if isinstance(c, dict)
-                )
+                content = "\n".join(c.get("text", "") for c in content if isinstance(c, dict))
             system_parts.append(content)
             continue
 
@@ -330,9 +327,7 @@ async def oauth_completion(
             json=payload,
         )
     if resp.status_code != 200:
-        raise RuntimeError(
-            f"Anthropic OAuth call failed ({resp.status_code}): {resp.text[:500]}"
-        )
+        raise RuntimeError(f"Anthropic OAuth call failed ({resp.status_code}): {resp.text[:500]}")
     data = resp.json()
 
     text_parts: list[str] = []
@@ -399,17 +394,18 @@ async def oauth_stream(
     input_tokens = 0
     output_tokens = 0
 
-    async with httpx.AsyncClient(timeout=timeout) as client, client.stream(
-        "POST",
-        ANTHROPIC_API_MESSAGES_URL,
-        headers=_headers(creds.access_token),
-        json=payload,
-    ) as resp:
+    async with (
+        httpx.AsyncClient(timeout=timeout) as client,
+        client.stream(
+            "POST",
+            ANTHROPIC_API_MESSAGES_URL,
+            headers=_headers(creds.access_token),
+            json=payload,
+        ) as resp,
+    ):
         if resp.status_code != 200:
             body = (await resp.aread()).decode("utf-8", "replace")
-            raise RuntimeError(
-                f"Anthropic OAuth stream failed ({resp.status_code}): {body[:500]}"
-            )
+            raise RuntimeError(f"Anthropic OAuth stream failed ({resp.status_code}): {body[:500]}")
 
         current_event: str | None = None
         async for line in resp.aiter_lines():

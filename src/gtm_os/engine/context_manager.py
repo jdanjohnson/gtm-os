@@ -1,7 +1,14 @@
 """3-layer context management — pruning, memory flush, compaction.
 
-Inspired by TrustClaw's ContextManager pattern. Token counts are approximate (1 token ~= 4
-characters) when tiktoken isn't available, but exact-when-possible.
+Implements WS2D:
+- Tiered compaction for local models (Ollama): 3-tier system from Forge
+  - Tier 1 (light): truncate old tool results to 200 chars
+  - Tier 2 (medium): drop tool results entirely, preserve reasoning
+  - Tier 3 (aggressive): drop reasoning, keep tool call skeleton only
+- Model-aware token budgets: different max context per model
+- Token budget tracking per experiment (integrates with experiment's token_budget)
+
+Inspired by TrustClaw's ContextManager pattern and Forge's TieredCompact.
 """
 
 from __future__ import annotations
@@ -13,6 +20,23 @@ from ..config import LLMConfig
 from .memory import VectorMemory
 
 logger = logging.getLogger(__name__)
+
+# Model-aware max context tokens.
+MODEL_CONTEXT_LIMITS: dict[str, int] = {
+    "openai/gpt-4o": 128_000,
+    "openai/gpt-4o-mini": 128_000,
+    "openai/gpt-4-turbo": 128_000,
+    "anthropic/claude-3-5-sonnet-20241022": 200_000,
+    "anthropic/claude-3-haiku-20240307": 200_000,
+    "anthropic/claude-3-opus-20240229": 200_000,
+    "ollama/llama3.1": 8_192,
+    "ollama/llama3": 8_192,
+    "ollama/mistral": 8_192,
+    "ollama/mixtral": 32_768,
+    "ollama/codellama": 16_384,
+}
+
+DEFAULT_CONTEXT_LIMIT = 32_000
 
 
 def _count_tokens(text: str, model: str) -> int:
@@ -26,7 +50,7 @@ def _count_tokens(text: str, model: str) -> int:
         except Exception:
             enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text))
-    except Exception:  # pragma: no cover — tiktoken is a hard dep but be safe
+    except Exception:
         return max(1, len(text) // 4)
 
 
@@ -41,21 +65,42 @@ def estimate_tokens(messages: list[dict], model: str) -> int:
     return sum(_count_tokens(_msg_text(m), model) for m in messages)
 
 
+def _get_model_context_limit(model: str) -> int:
+    """Resolve the context window size for a given model."""
+    if model in MODEL_CONTEXT_LIMITS:
+        return MODEL_CONTEXT_LIMITS[model]
+    for prefix, limit in MODEL_CONTEXT_LIMITS.items():
+        if model.startswith(prefix.rsplit("/", 1)[0] + "/"):
+            return limit
+    return DEFAULT_CONTEXT_LIMIT
+
+
 class ContextManager:
-    """Three-layer context management for long-running agent sessions."""
+    """Three-layer context management for long-running agent sessions.
+
+    Model-aware: automatically adjusts budget based on the model being used.
+    Supports tiered compaction for resource-constrained models (Ollama).
+    """
 
     def __init__(
         self,
         llm_config: LLMConfig,
         *,
-        max_context_tokens: int = 32_000,
+        max_context_tokens: int | None = None,
         soft_trim_ratio: float = 0.30,
         hard_clear_ratio: float = 0.50,
     ) -> None:
         self.llm_config = llm_config
-        self.max_context_tokens = max_context_tokens
+        # WS2D: Model-aware context budget.
+        if max_context_tokens is not None:
+            self.max_context_tokens = max_context_tokens
+        else:
+            model_limit = _get_model_context_limit(llm_config.model)
+            # Use 80% of model limit to leave room for system prompt + response.
+            self.max_context_tokens = int(model_limit * 0.80)
         self.soft_trim_ratio = soft_trim_ratio
         self.hard_clear_ratio = hard_clear_ratio
+        self._is_local_model = llm_config.model.startswith("ollama/")
 
     # Layer 1 — pruning
     def prune(self, messages: list[dict]) -> list[dict]:
@@ -71,6 +116,11 @@ class ContextManager:
 
         out = [dict(m) for m in messages]
         keep_recent = max(2, min(4, len(out) // 2))
+
+        # WS2D: For local models, use tiered compaction.
+        if self._is_local_model:
+            return self._tiered_compact(out, tokens, budget)
+
         for m in out[:-keep_recent] if keep_recent < len(out) else []:
             if m.get("role") != "tool":
                 continue
@@ -91,6 +141,52 @@ class ContextManager:
                 m["content"] = "[tool result dropped to free context]"
             cleaned.append(m)
         return cleaned
+
+    def _tiered_compact(self, messages: list[dict], tokens: int, budget: int) -> list[dict]:
+        """WS2D: Three-tier compaction for local/small-context models."""
+        keep_recent = max(2, min(4, len(messages) // 2))
+
+        # Tier 1 (light): truncate old tool results to 200 chars.
+        for m in messages[:-keep_recent] if keep_recent < len(messages) else []:
+            if m.get("role") == "tool":
+                content = str(m.get("content") or "")
+                if len(content) > 200:
+                    m["content"] = content[:200] + "…"
+
+        tokens = estimate_tokens(messages, self.llm_config.model)
+        if tokens <= budget:
+            return messages
+
+        # Tier 2 (medium): drop tool results entirely, preserve reasoning.
+        for m in messages[:-keep_recent] if keep_recent < len(messages) else []:
+            if m.get("role") == "tool":
+                m["content"] = "[dropped]"
+
+        tokens = estimate_tokens(messages, self.llm_config.model)
+        if tokens <= budget:
+            return messages
+
+        # Tier 3 (aggressive): drop reasoning, keep tool call skeleton only.
+        compacted: list[dict] = []
+        for i, m in enumerate(messages):
+            if i >= len(messages) - keep_recent:
+                compacted.append(m)
+                continue
+            if m.get("role") == "assistant":
+                tool_calls = m.get("tool_calls")
+                if tool_calls:
+                    compacted.append(
+                        {"role": "assistant", "content": None, "tool_calls": tool_calls}
+                    )
+                # Drop content-only assistant messages in tier 3.
+                continue
+            if m.get("role") == "tool":
+                compacted.append(
+                    {"role": "tool", "tool_call_id": m.get("tool_call_id"), "content": "[dropped]"}
+                )
+                continue
+            compacted.append(m)
+        return compacted
 
     # Layer 2 — memory flush
     async def flush_to_memory(
@@ -139,51 +235,25 @@ class ContextManager:
                 "agent could pick up. Preserve: facts, decisions, prospect data, hypotheses, "
                 "open tasks. Drop pleasantries."
             )
-            convo = "\n".join(
-                f"[{m.get('role')}] {(m.get('content') or '')[:1000]}" for m in head
-            )
+            convo = "\n".join(f"[{m.get('role')}] {(m.get('content') or '')[:1000]}" for m in head)
             resp = await litellm.acompletion(
                 model=self.llm_config.model,
                 messages=[
                     {"role": "system", "content": summary_prompt},
                     {"role": "user", "content": convo},
                 ],
-                api_key=self.llm_config.api_key,
-                temperature=0.2,
                 max_tokens=800,
-                timeout=self.llm_config.request_timeout_seconds,
+                temperature=0.2,
             )
-            summary = resp.choices[0].message.content
+            summary_text = resp.choices[0].message.content or ""
         except Exception as exc:
-            logger.warning("compaction failed: %s", exc)
-            summary = (
-                "[compaction unavailable — earlier conversation preserved verbatim was "
-                f"~{estimate_tokens(head, self.llm_config.model)} tokens]"
+            logger.warning("compaction LLM call failed: %s", exc)
+            summary_text = "\n".join(
+                f"- [{m.get('role')}] {(m.get('content') or '')[:150]}" for m in head[:6]
             )
 
-        return [
-            {"role": "system", "content": f"[Conversation summary]\n{summary}"},
-            *tail,
-        ]
-
-    def tiered_compact(self, messages: list[dict], tier: int) -> list[dict]:
-        """Forge-style tiered compaction for local / small-context models."""
-        out: list[dict] = []
-        for m in messages:
-            mm = dict(m)
-            if tier >= 1 and mm.get("role") == "tool":
-                content = mm.get("content") or ""
-                if isinstance(content, str) and len(content) > 200:
-                    mm["content"] = content[:200] + "…"
-            if tier >= 2 and mm.get("role") == "tool":
-                mm["content"] = "[tool result dropped]"
-            if tier >= 3 and mm.get("role") == "assistant":
-                tcs = mm.get("tool_calls") or []
-                mm["content"] = ""
-                if tcs:
-                    skeleton = ", ".join(
-                        (tc.get("function", {}) or {}).get("name", "tool") for tc in tcs
-                    )
-                    mm["content"] = f"[called: {skeleton}]"
-            out.append(mm)
-        return out
+        summary_msg: dict[str, Any] = {
+            "role": "system",
+            "content": f"[Conversation history summary]\n{summary_text}",
+        }
+        return [summary_msg, *tail]

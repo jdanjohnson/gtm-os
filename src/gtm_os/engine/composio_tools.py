@@ -63,9 +63,7 @@ class ComposioIntegration:
             logger.exception("composio discover failed")
             return [{"error": "discover_failed", "message": str(exc)}]
 
-    async def execute_action(
-        self, action: str, params: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def execute_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         ts = self._ensure_toolset()
         if ts is None:
             return {
@@ -99,9 +97,7 @@ class ComposioIntegration:
                 "message": "Composio isn't configured.",
             }
         try:
-            fn = getattr(ts, "initiate_connection", None) or getattr(
-                ts, "manage_connection", None
-            )
+            fn = getattr(ts, "initiate_connection", None) or getattr(ts, "manage_connection", None)
             if fn is None:
                 return {"ok": False, "error": "unsupported_sdk_method"}
             result = await asyncio.to_thread(fn, integration=toolkit)

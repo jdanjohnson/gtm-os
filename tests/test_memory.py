@@ -1,4 +1,3 @@
-
 import pytest
 
 from gtm_os.config import LLMConfig
@@ -25,8 +24,9 @@ async def test_memory_keyword_fallback(store: Store):
 @pytest.mark.asyncio
 async def test_memory_reinforce(store: Store):
     memory = VectorMemory(store, LLMConfig(embedding_model=""))
-    m = await memory.save("subject lines with dollar amounts get higher reply rates",
-                          type="learning", confidence=0.5)
+    m = await memory.save(
+        "subject lines with dollar amounts get higher reply rates", type="learning", confidence=0.5
+    )
     reinforced = await memory.reinforce(m.id, experiment_id="exp-1")
     assert reinforced is not None
     assert reinforced.confidence > 0.5

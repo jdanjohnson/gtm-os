@@ -44,9 +44,7 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
     )
 
     primitives = gtm.runner.load_primitives_cached()
-    experiment = (
-        gtm.store.get_experiment(experiment_id) if experiment_id else None
-    )
+    experiment = gtm.store.get_experiment(experiment_id) if experiment_id else None
     agent_name = body.agent or (
         PHASE_AGENT.get(experiment.phase, "orchestrator") if experiment else "orchestrator"
     )
@@ -127,9 +125,7 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
                         experiment_id=experiment_id,
                     )
                     if experiment_id:
-                        gtm.store.add_experiment_tokens(
-                            experiment_id, int(evt.get("tokens") or 0)
-                        )
+                        gtm.store.add_experiment_tokens(experiment_id, int(evt.get("tokens") or 0))
                     yield {
                         "event": "final",
                         "data": json.dumps(

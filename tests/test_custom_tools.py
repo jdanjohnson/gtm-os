@@ -1,4 +1,3 @@
-
 import pytest
 
 from gtm_os.config import LLMConfig
@@ -45,9 +44,7 @@ async def test_schedule_task(store: Store):
     tools = build_custom_tools(store=store, memory=memory, play_ids=[])
     by_name = {t.name: t for t in tools}
     exp = store.create_experiment(name="sched")
-    out = await by_name["schedule_task"].execute(
-        experiment_id=exp.id, cron_expr="0 9 * * *"
-    )
+    out = await by_name["schedule_task"].execute(experiment_id=exp.id, cron_expr="0 9 * * *")
     assert out["ok"]
     assert out["schedule_id"]
 
@@ -58,9 +55,7 @@ async def test_request_approval_pauses(store: Store):
     tools = build_custom_tools(store=store, memory=memory, play_ids=[])
     by_name = {t.name: t for t in tools}
     exp = store.create_experiment(name="appr")
-    out = await by_name["request_approval"].execute(
-        experiment_id=exp.id, message="ok to send?"
-    )
+    out = await by_name["request_approval"].execute(experiment_id=exp.id, message="ok to send?")
     assert out["phase"] == "paused"
     refreshed = store.get_experiment(exp.id)
     assert refreshed.phase == "paused"

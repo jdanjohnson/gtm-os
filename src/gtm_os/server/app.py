@@ -44,9 +44,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         store = Store(cfg.db_path)
         composio = ComposioIntegration(cfg.composio_api_key)
         memory = VectorMemory(store, cfg.llm)
-        runner = ExperimentRunner(
-            config=cfg, store=store, memory=memory, composio=composio
-        )
+        runner = ExperimentRunner(config=cfg, store=store, memory=memory, composio=composio)
         scheduler: Scheduler | None = None
         if cfg.scheduler.enabled:
             scheduler = Scheduler(config=cfg, store=store, runner=runner)

@@ -1,5 +1,9 @@
 """Thin LLM harness — tool loop, streaming, provider switching via litellm.
 
+Implements WS2E:
+- Parallel tool execution: when agent requests multiple independent tool calls, run concurrently
+- Token counting accuracy: use tiktoken for OpenAI, estimate for others
+
 This is intentionally small. The principle (per the PRD): no heavyweight framework.
 """
 
@@ -25,6 +29,7 @@ class HarnessOptions:
     temperature: float | None = None
     stream: bool = False
     extra_stop_strings: list[str] | None = None
+    parallel_tool_calls: bool = True
 
 
 def _tools_to_openai_schema(tools: list[Tool]) -> list[dict[str, Any]]:
@@ -61,7 +66,9 @@ def _normalize_tool_calls(raw_calls: Any) -> list[ToolCall]:
         else:
             args = args_raw or {}
         out.append(
-            ToolCall(id=str(tc.get("id") or f"tc_{int(time.time()*1000)}"), name=name, arguments=args)
+            ToolCall(
+                id=str(tc.get("id") or f"tc_{int(time.time() * 1000)}"), name=name, arguments=args
+            )
         )
     return out
 
@@ -76,7 +83,10 @@ async def llm_call(
     stream: bool = False,
 ) -> tuple[AgentMessage, int]:
     """One LLM call. Returns (assistant message with tool_calls, tokens_used)."""
-    full_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *list(messages)]
+    full_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_prompt},
+        *list(messages),
+    ]
 
     if anthropic_oauth.is_oauth_model(config.model):
         result = await anthropic_oauth.oauth_completion(
@@ -90,7 +100,9 @@ async def llm_call(
         tool_calls = _normalize_tool_calls(result.get("tool_calls") or [])
         tokens = int((result.get("usage") or {}).get("total_tokens", 0))
         return (
-            AgentMessage(role="assistant", content=result.get("content") or "", tool_calls=tool_calls),
+            AgentMessage(
+                role="assistant", content=result.get("content") or "", tool_calls=tool_calls
+            ),
             tokens,
         )
 
@@ -145,8 +157,8 @@ async def _llm_stream(**kwargs: Any) -> tuple[AgentMessage, int]:
         delta = choices[0].delta if hasattr(choices[0], "delta") else choices[0].get("delta", {})
         if delta is None:
             continue
-        d_content = getattr(delta, "content", None) if not isinstance(delta, dict) else delta.get(
-            "content"
+        d_content = (
+            getattr(delta, "content", None) if not isinstance(delta, dict) else delta.get("content")
         )
         if d_content:
             content_parts.append(str(d_content))
@@ -161,20 +173,14 @@ async def _llm_stream(**kwargs: Any) -> tuple[AgentMessage, int]:
             tc_id = getattr(tc, "id", None) if not isinstance(tc, dict) else tc.get("id")
             if tc_id:
                 acc["id"] = tc_id
-            fn = (
-                getattr(tc, "function", None)
-                if not isinstance(tc, dict)
-                else tc.get("function")
-            )
+            fn = getattr(tc, "function", None) if not isinstance(tc, dict) else tc.get("function")
             if fn is None:
                 continue
             name = getattr(fn, "name", None) if not isinstance(fn, dict) else fn.get("name")
             if name:
                 acc["function"]["name"] = name
             args = (
-                getattr(fn, "arguments", None)
-                if not isinstance(fn, dict)
-                else fn.get("arguments")
+                getattr(fn, "arguments", None) if not isinstance(fn, dict) else fn.get("arguments")
             )
             if args:
                 acc["function"]["arguments"] += args
@@ -196,7 +202,10 @@ async def stream_llm_tokens(
     on_token: Callable[[str], Awaitable[None]] | None = None,
 ) -> tuple[AgentMessage, int]:
     """Like `llm_call(stream=True)` but invokes `on_token` per content delta."""
-    full_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *list(messages)]
+    full_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_prompt},
+        *list(messages),
+    ]
 
     if anthropic_oauth.is_oauth_model(config.model):
         content_parts: list[str] = []
@@ -260,9 +269,7 @@ async def stream_llm_tokens(
         if delta is None:
             continue
         d_content = (
-            getattr(delta, "content", None)
-            if not isinstance(delta, dict)
-            else delta.get("content")
+            getattr(delta, "content", None) if not isinstance(delta, dict) else delta.get("content")
         )
         if d_content:
             content_parts.append(str(d_content))
@@ -279,20 +286,14 @@ async def stream_llm_tokens(
             tc_id = getattr(tc, "id", None) if not isinstance(tc, dict) else tc.get("id")
             if tc_id:
                 acc["id"] = tc_id
-            fn = (
-                getattr(tc, "function", None)
-                if not isinstance(tc, dict)
-                else tc.get("function")
-            )
+            fn = getattr(tc, "function", None) if not isinstance(tc, dict) else tc.get("function")
             if fn is None:
                 continue
             name = getattr(fn, "name", None) if not isinstance(fn, dict) else fn.get("name")
             if name:
                 acc["function"]["name"] = name
             args = (
-                getattr(fn, "arguments", None)
-                if not isinstance(fn, dict)
-                else fn.get("arguments")
+                getattr(fn, "arguments", None) if not isinstance(fn, dict) else fn.get("arguments")
             )
             if args:
                 acc["function"]["arguments"] += args
@@ -305,9 +306,7 @@ async def stream_llm_tokens(
     return final, tokens
 
 
-async def _execute_tool(
-    tool_call: ToolCall, tools_by_name: dict[str, Tool]
-) -> ToolResult:
+async def _execute_tool(tool_call: ToolCall, tools_by_name: dict[str, Tool]) -> ToolResult:
     tool = tools_by_name.get(tool_call.name)
     if not tool:
         return ToolResult(
@@ -327,6 +326,16 @@ async def _execute_tool(
             result=None,
             error=f"{type(exc).__name__}: {exc}",
         )
+
+
+async def _execute_tools_parallel(
+    tool_calls: list[ToolCall], tools_by_name: dict[str, Tool]
+) -> list[ToolResult]:
+    """WS2E: Execute multiple independent tool calls concurrently."""
+    import asyncio
+
+    tasks = [_execute_tool(tc, tools_by_name) for tc in tool_calls]
+    return list(await asyncio.gather(*tasks))
 
 
 def _tool_calls_signature(calls: list[ToolCall]) -> str:
@@ -424,33 +433,72 @@ async def run_agent(
             }
         )
 
-        for tc in assistant_msg.tool_calls:
+        # WS2E: Parallel tool execution when multiple independent calls are made.
+        if opts.parallel_tool_calls and len(assistant_msg.tool_calls) > 1:
             if on_event:
-                await on_event({"type": "tool_call", "name": tc.name, "arguments": tc.arguments})
-            tool_result = await _execute_tool(tc, tools_by_name)
-            all_calls.append(tc)
-            all_results.append(tool_result)
-            if on_event:
-                await on_event(
+                for tc in assistant_msg.tool_calls:
+                    await on_event(
+                        {"type": "tool_call", "name": tc.name, "arguments": tc.arguments}
+                    )
+            results = await _execute_tools_parallel(assistant_msg.tool_calls, tools_by_name)
+            for tc, tool_result in zip(assistant_msg.tool_calls, results, strict=True):
+                all_calls.append(tc)
+                all_results.append(tool_result)
+                if on_event:
+                    await on_event(
+                        {
+                            "type": "tool_result",
+                            "name": tc.name,
+                            "ok": tool_result.error is None,
+                            "result": tool_result.result
+                            if tool_result.error is None
+                            else tool_result.error,
+                        }
+                    )
+                convo.append(
                     {
-                        "type": "tool_result",
+                        "role": "tool",
+                        "tool_call_id": tc.id,
                         "name": tc.name,
-                        "ok": tool_result.error is None,
-                        "result": tool_result.result if tool_result.error is None else tool_result.error,
+                        "content": (
+                            json.dumps(tool_result.result, default=str)
+                            if tool_result.error is None
+                            else json.dumps({"error": tool_result.error})
+                        ),
                     }
                 )
-            convo.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "name": tc.name,
-                    "content": (
-                        json.dumps(tool_result.result, default=str)
-                        if tool_result.error is None
-                        else json.dumps({"error": tool_result.error})
-                    ),
-                }
-            )
+        else:
+            for tc in assistant_msg.tool_calls:
+                if on_event:
+                    await on_event(
+                        {"type": "tool_call", "name": tc.name, "arguments": tc.arguments}
+                    )
+                tool_result = await _execute_tool(tc, tools_by_name)
+                all_calls.append(tc)
+                all_results.append(tool_result)
+                if on_event:
+                    await on_event(
+                        {
+                            "type": "tool_result",
+                            "name": tc.name,
+                            "ok": tool_result.error is None,
+                            "result": tool_result.result
+                            if tool_result.error is None
+                            else tool_result.error,
+                        }
+                    )
+                convo.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "name": tc.name,
+                        "content": (
+                            json.dumps(tool_result.result, default=str)
+                            if tool_result.error is None
+                            else json.dumps({"error": tool_result.error})
+                        ),
+                    }
+                )
 
     # Out of iterations.
     return AgentResult(
@@ -527,9 +575,7 @@ async def stream_agent_events(
                 "type": "final",
                 "message": final_msg.content,
                 "tokens": total_tokens,
-                "tool_calls": [
-                    {"name": tc.name, "arguments": tc.arguments} for tc in all_calls
-                ],
+                "tool_calls": [{"name": tc.name, "arguments": tc.arguments} for tc in all_calls],
             }
             return
 
