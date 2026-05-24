@@ -8,9 +8,7 @@ import { PrimitivesSummary, streamChat } from "../lib/api";
 interface Props {
   experimentId: string | null;
   primitives: PrimitivesSummary | null;
-  /** Map of experiment IDs to names for display in session tabs. */
   experimentNames?: Record<string, string>;
-  /** Called when user clicks a session tab for a different experiment. */
   onSwitchExperiment?: (id: string | null) => void;
 }
 
@@ -57,7 +55,6 @@ export default function Chat({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [, forceRender] = useState(0);
 
-  // Save current session to the cache.
   const saveCurrentSession = useCallback(() => {
     const key = sessionKey(prevExpRef.current);
     const current = sessionsRef.current.get(key) ?? emptySession();
@@ -69,33 +66,25 @@ export default function Chat({
     });
   }, [messages, threadId, agent]);
 
-  // When experiment changes, save current session and restore (or create) the target.
   useEffect(() => {
     if (prevExpRef.current === experimentId) return;
-
-    // Save outgoing session.
     saveCurrentSession();
-
-    // Restore or init incoming session.
     const key = sessionKey(experimentId);
     const cached = sessionsRef.current.get(key);
     if (cached) {
       setMessages(cached.messages);
       setThreadId(cached.threadId);
       setAgent(cached.agent);
-      // Clear unread when switching to this session.
       sessionsRef.current.set(key, { ...cached, unread: 0 });
     } else {
       setMessages([]);
       setThreadId(null);
       setAgent("orchestrator");
     }
-
     prevExpRef.current = experimentId;
     forceRender((n) => n + 1);
   }, [experimentId, saveCurrentSession]);
 
-  // Auto-save session periodically so the ref stays up-to-date.
   useEffect(() => {
     const key = sessionKey(experimentId);
     const current = sessionsRef.current.get(key) ?? emptySession();
@@ -242,19 +231,15 @@ export default function Chat({
     setStreaming(false);
   };
 
-  // Close a session tab.
   const closeSession = (key: string) => {
     sessionsRef.current.delete(key);
-    // If closing the currently active session, switch to general.
     if (key === sessionKey(experimentId)) {
       onSwitchExperiment?.(null);
     }
     forceRender((n) => n + 1);
   };
 
-  // Build the list of active session keys for the tab strip.
   const activeSessionKeys = Array.from(sessionsRef.current.keys());
-  // Always ensure current session is in the list.
   const currentKey = sessionKey(experimentId);
   if (!activeSessionKeys.includes(currentKey)) {
     activeSessionKeys.unshift(currentKey);
@@ -264,7 +249,7 @@ export default function Chat({
     <div className="flex h-full w-full flex-col">
       {/* Session tab strip */}
       {activeSessionKeys.length > 0 && (
-        <div className="flex items-center gap-0.5 overflow-x-auto border-b border-slate-800 bg-slate-900/60 px-2 py-1">
+        <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1">
           {activeSessionKeys.map((key) => {
             const isActive = key === currentKey;
             const session = sessionsRef.current.get(key);
@@ -284,8 +269,8 @@ export default function Chat({
                 className={clsx(
                   "group relative flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-all",
                   isActive
-                    ? "bg-slate-700/80 text-slate-100"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
+                    ? "bg-[#2A2A2A] text-white"
+                    : "text-[#A1A1AA] hover:bg-[#2A2A2A]/60 hover:text-white",
                 )}
               >
                 <span className={clsx(
@@ -304,7 +289,7 @@ export default function Chat({
                       e.stopPropagation();
                       closeSession(key);
                     }}
-                    className="ml-0.5 hidden rounded p-0.5 text-slate-500 hover:bg-slate-600 hover:text-slate-200 group-hover:inline-block"
+                    className="ml-0.5 hidden rounded p-0.5 text-[#A1A1AA] hover:bg-[#3A3A3A] hover:text-white group-hover:inline-block"
                   >
                     ✕
                   </span>
@@ -315,13 +300,13 @@ export default function Chat({
         </div>
       )}
 
-      {/* Agent selector + context info */}
-      <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs text-slate-400">
-        <span>agent:</span>
+      {/* Agent selector */}
+      <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-3 py-1.5 text-xs text-[#A1A1AA]">
+        <span>Agent:</span>
         <select
           value={agent}
           onChange={(e) => setAgent(e.target.value)}
-          className="rounded bg-slate-800 px-2 py-1 text-slate-100"
+          className="rounded bg-[#2A2A2A] px-2 py-1 text-white"
         >
           {(primitives?.agents.length ? primitives.agents : ["orchestrator"]).map(
             (a) => (
@@ -331,31 +316,28 @@ export default function Chat({
             ),
           )}
         </select>
-        <span className="ml-3">
-          {experimentId ? `experiment: ${experimentId.slice(0, 8)}…` : "no experiment selected"}
-        </span>
-        <span className="ml-3">
-          {threadId ? `thread: ${threadId.slice(0, 12)}…` : ""}
-        </span>
+        {experimentId && (
+          <span className="ml-auto text-[10px]">
+            exp: {experimentId.slice(0, 8)}…
+          </span>
+        )}
       </div>
 
       {/* Messages area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-6"
+        className="flex-1 overflow-y-auto px-4 py-4"
       >
         {messages.length === 0 && (
-          <div className="mx-auto max-w-2xl rounded-xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-300">
-            <h2 className="mb-2 text-lg font-semibold text-slate-100">
-              You're talking to your GTM team.
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-4 text-sm text-[#A1A1AA]">
+            <h2 className="mb-2 text-base font-semibold text-white">
+              Talk to your GTM team.
             </h2>
-            <p className="mb-2">
-              Describe what you want them to do. Examples:
-            </p>
-            <ul className="ml-4 list-disc text-slate-400">
-              <li>Find 20 e-commerce founders on Apollo who use Shopify and send them my pitch.</li>
-              <li>Set up a weekly experiment to email new prospects with the b2b-emailing play.</li>
-              <li>Search memory for what worked when we sold to dev tools last month.</li>
+            <p className="mb-2 text-xs">Examples:</p>
+            <ul className="ml-4 list-disc text-xs text-[#A1A1AA]">
+              <li>Find 20 e-commerce founders on Apollo and send my pitch.</li>
+              <li>Set up a weekly cold outbound experiment.</li>
+              <li>Search memory for what worked with dev tools.</li>
             </ul>
           </div>
         )}
@@ -366,7 +348,7 @@ export default function Chat({
       </div>
 
       {/* Input area */}
-      <div className="border-t border-slate-800 bg-slate-900/30 px-6 py-4">
+      <div className="border-t border-[#2A2A2A] bg-[#1A1A1A] px-3 py-3">
         <div className="flex gap-2">
           <textarea
             value={input}
@@ -379,13 +361,13 @@ export default function Chat({
             }}
             placeholder="What should the team do next?"
             rows={2}
-            className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            className="flex-1 resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm outline-none placeholder-[#A1A1AA] focus:border-emerald-500"
             disabled={streaming}
           />
           {streaming ? (
             <button
               onClick={stop}
-              className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-medium hover:bg-rose-600"
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500"
             >
               Stop
             </button>
@@ -393,7 +375,7 @@ export default function Chat({
             <button
               onClick={send}
               disabled={!input.trim()}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-40"
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-40"
             >
               Send
             </button>
@@ -407,7 +389,7 @@ export default function Chat({
 function Message({ m }: { m: UIMessage }) {
   if (m.role === "tool") {
     return (
-      <div className="mx-auto my-2 max-w-3xl rounded border border-slate-800 bg-slate-900/30 px-3 py-2 text-xs text-slate-400">
+      <div className="my-2 rounded border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs text-[#A1A1AA]">
         <div className="flex items-center justify-between">
           <span className="font-mono">
             {m.pending ? "→" : m.ok ? "✓" : "✗"} {m.tool_name}
@@ -422,7 +404,7 @@ function Message({ m }: { m: UIMessage }) {
 
   if (m.role === "system") {
     return (
-      <div className="mx-auto my-2 max-w-3xl rounded border border-amber-900/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+      <div className="my-2 rounded border border-amber-900/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
         {m.content}
       </div>
     );
@@ -431,16 +413,16 @@ function Message({ m }: { m: UIMessage }) {
   return (
     <div
       className={clsx(
-        "mx-auto my-3 flex max-w-3xl",
+        "my-2 flex",
         m.role === "user" ? "justify-end" : "justify-start",
       )}
     >
       <div
         className={clsx(
-          "max-w-2xl rounded-xl px-4 py-3",
+          "max-w-[90%] rounded-xl px-3 py-2.5",
           m.role === "user"
-            ? "bg-emerald-700/60 text-slate-50"
-            : "bg-slate-900 text-slate-100",
+            ? "bg-emerald-700/60 text-white"
+            : "bg-[#2A2A2A] text-[#FAFAFA]",
           m.pending && "opacity-90",
         )}
       >
