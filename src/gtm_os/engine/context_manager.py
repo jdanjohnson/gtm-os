@@ -70,7 +70,8 @@ class ContextManager:
             return messages
 
         out = [dict(m) for m in messages]
-        for m in out[:-4]:
+        keep_recent = max(2, min(4, len(out) // 2))
+        for m in out[:-keep_recent] if keep_recent < len(out) else []:
             if m.get("role") != "tool":
                 continue
             content = m.get("content") or ""
@@ -83,12 +84,10 @@ class ContextManager:
         if tokens <= hard:
             return out
 
+        drop_before = max(0, len(out) - max(4, keep_recent + 2))
         cleaned: list[dict] = []
         for i, m in enumerate(out):
-            if (
-                m.get("role") == "tool"
-                and i < len(out) - 6
-            ):
+            if m.get("role") == "tool" and i < drop_before:
                 m["content"] = "[tool result dropped to free context]"
             cleaned.append(m)
         return cleaned

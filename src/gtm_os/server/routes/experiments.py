@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-
 
 router = APIRouter()
 
@@ -159,8 +159,9 @@ async def resume_experiment(experiment_id: str, request: Request, target_phase: 
 async def schedule_experiment(
     experiment_id: str, body: ScheduleBody, request: Request
 ):
+    from datetime import datetime, timedelta
+
     from croniter import croniter
-    from datetime import datetime, timedelta, timezone
 
     from ...engine.store import _new_id
     from ...types import Schedule
@@ -171,16 +172,16 @@ async def schedule_experiment(
     if body.cron_expr:
         try:
             next_run = (
-                croniter(body.cron_expr, datetime.now(timezone.utc))
+                croniter(body.cron_expr, datetime.now(UTC))
                 .get_next(datetime)
-                .astimezone(timezone.utc)
+                .astimezone(UTC)
                 .isoformat(timespec="seconds")
             )
         except Exception as exc:
-            raise HTTPException(400, f"invalid cron: {exc}")
+            raise HTTPException(400, f"invalid cron: {exc}") from exc
     else:
         next_run = (
-            datetime.now(timezone.utc) + timedelta(seconds=int(body.interval_seconds))
+            datetime.now(UTC) + timedelta(seconds=int(body.interval_seconds))
         ).isoformat(timespec="seconds")
 
     sched = Schedule(

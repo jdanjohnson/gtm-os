@@ -6,13 +6,12 @@ configured, memory still works as keyword/recency search.
 
 from __future__ import annotations
 
-import array
 import json
 import logging
 import math
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
@@ -133,7 +132,7 @@ class VectorMemory:
             return None
         if experiment_id in m.reinforced_by:
             return m
-        reinforced = m.reinforced_by + [experiment_id]
+        reinforced = [*m.reinforced_by, experiment_id]
         new_conf = min(1.0, m.confidence + 0.1)
         self.store.update_memory_confidence(
             memory_id, confidence=new_conf, reinforced_by=reinforced

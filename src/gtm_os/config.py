@@ -9,7 +9,6 @@ from typing import Any
 
 import yaml
 
-
 DEFAULT_CONFIG: dict[str, Any] = {
     "primitives_dir": "./primitives",
     "data_dir": "./data",
@@ -175,6 +174,7 @@ def _resolve_llm_api_key(model: str) -> str | None:
     env_map = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
+        "anthropic_oauth": None,  # uses Claude Code's OAuth token; no env var needed.
         "groq": "GROQ_API_KEY",
         "mistral": "MISTRAL_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",

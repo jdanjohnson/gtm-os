@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib.resources as resources
-import os
 import shutil
 import webbrowser
 from pathlib import Path
-from typing import Optional
 
 import typer
 import uvicorn
@@ -23,15 +22,20 @@ from .engine.loader import primitives_exist
 from .engine.memory import VectorMemory
 from .engine.store import Store
 
-
 app = typer.Typer(add_completion=False, help="GTM-OS — autonomous GTM operating system.")
 console = Console()
 
 
-@app.callback()
-def main(version: bool = typer.Option(False, "--version", "-v", help="Show version and exit.")):
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-v", help="Show version and exit."),
+):
     if version:
         console.print(f"gtm-os {__version__}")
+        raise typer.Exit(code=0)
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
         raise typer.Exit(code=0)
 
 
@@ -40,13 +44,21 @@ def _resolve_default_primitives_src() -> Path | None:
 
     Order of preference:
       1. `primitives/` next to a `pyproject.toml` going up from cwd (dev mode)
-      2. `gtm_os/_default_primitives` packaged inside the wheel
+      2. `primitives/` walking up from the installed package (editable installs)
+      3. `gtm_os/_default_primitives` packaged inside the wheel
     """
     cur = Path.cwd().resolve()
     for parent in [cur, *cur.parents]:
         candidate = parent / "primitives"
         if (candidate / "agents").exists():
             return candidate
+
+    pkg_dir = Path(__file__).resolve().parent
+    for parent in [pkg_dir, *pkg_dir.parents]:
+        candidate = parent / "primitives"
+        if (candidate / "agents").exists():
+            return candidate
+
     try:
         ref = resources.files("gtm_os").joinpath("_default_primitives")
         if ref.is_dir():
@@ -70,10 +82,9 @@ def init(
     target = target.resolve()
     target.mkdir(parents=True, exist_ok=True)
     dst = target / "primitives"
-    if dst.exists() and not force:
-        if primitives_exist(dst):
-            console.print(f"[yellow]primitives/ already exists at {dst} — use --force to overwrite.[/yellow]")
-            raise typer.Exit(code=1)
+    if dst.exists() and not force and primitives_exist(dst):
+        console.print(f"[yellow]primitives/ already exists at {dst} — use --force to overwrite.[/yellow]")
+        raise typer.Exit(code=1)
 
     src = _resolve_default_primitives_src()
     if src is None:
@@ -104,13 +115,13 @@ def init(
 
     data_dir = target / "data"
     data_dir.mkdir(exist_ok=True)
-    console.print(f"[green]Ready.[/green]  Next: set OPENAI_API_KEY (or another provider) and run `gtm-os start`.")
+    console.print("[green]Ready.[/green]  Next: set OPENAI_API_KEY (or another provider) and run `gtm-os start`.")
 
 
 @app.command()
 def start(
-    host: Optional[str] = typer.Option(None, help="Override server host."),
-    port: Optional[int] = typer.Option(None, help="Override server port."),
+    host: str | None = typer.Option(None, help="Override server host."),
+    port: int | None = typer.Option(None, help="Override server port."),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser when ready."),
     reload: bool = typer.Option(False, "--reload", help="Auto-reload on file changes (dev mode)."),
 ):
@@ -129,10 +140,8 @@ def start(
     console.print(f"[bold green]Starting GTM-OS at {url}[/bold green]")
 
     if open_browser:
-        try:
+        with contextlib.suppress(Exception):
             webbrowser.open(url)
-        except Exception:
-            pass
 
     uvicorn.run(
         "gtm_os.server.app:create_app",

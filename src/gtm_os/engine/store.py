@@ -10,12 +10,12 @@ import json
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from ..types import Experiment, Memory, MemoryType, Run, Schedule
-
 
 SCHEMA_STATEMENTS: list[str] = [
     """
@@ -113,7 +113,7 @@ SCHEMA_STATEMENTS: list[str] = [
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _new_id() -> str:

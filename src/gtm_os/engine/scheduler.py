@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from croniter import croniter
 
@@ -20,18 +20,17 @@ from ..config import Config
 from .experiment import ExperimentRunner
 from .store import Store
 
-
 logger = logging.getLogger(__name__)
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _next_run_at(*, cron_expr: str | None, interval_seconds: int | None) -> str:
     if cron_expr:
         return (
-            croniter(cron_expr, _now_utc()).get_next(datetime).astimezone(timezone.utc).isoformat(timespec="seconds")
+            croniter(cron_expr, _now_utc()).get_next(datetime).astimezone(UTC).isoformat(timespec="seconds")
         )
     seconds = int(interval_seconds or 3600)
     return (_now_utc() + timedelta(seconds=seconds)).isoformat(timespec="seconds")
@@ -87,7 +86,7 @@ class Scheduler:
         while not self._stop.is_set():
             try:
                 await self._tick()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("scheduler tick failed")
             # Sleep responsively.
             for _ in range(max(1, interval)):

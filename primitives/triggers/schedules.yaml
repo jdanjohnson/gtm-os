@@ -1,0 +1,20 @@
+# Default schedule templates. Reference these by name from custom_tools.schedule_task or
+# the React UI's schedule form. Each entry can be turned into an active schedule against
+# a specific experiment.
+
+templates:
+  daily_morning:
+    cron_expr: "0 9 * * *"
+    description: Every weekday at 9am local. Good for "send a fresh batch each morning."
+  weekday_mornings:
+    cron_expr: "0 9 * * 1-5"
+    description: Monday–Friday 9am.
+  weekly_review:
+    cron_expr: "0 10 * * 1"
+    description: Every Monday 10am — pull last week's metrics and propose follow-ups.
+  every_4_hours:
+    interval_seconds: 14400
+    description: Every 4 hours. Use for fast-iterating tests.
+  hourly_during_business:
+    cron_expr: "0 9-17 * * 1-5"
+    description: Top of every hour between 9am and 5pm, weekdays.

@@ -1,0 +1,28 @@
+# Hooks that fire when an experiment changes phase. The engine reads these as guidance
+# — the human-in-the-loop nature means you'll usually let the orchestrator decide.
+
+on_enter:
+  build:
+    # When an experiment enters `build`, the engine will surface this note to the
+    # copywriter agent's system prompt for the first tick.
+    note: |
+      You are entering the build phase. Read the experiment's hypothesis, the play's
+      sequence, and any relevant memories before drafting. Save your variations as a
+      checkpoint. Always finish with request_approval — do NOT transition to execute.
+  execute:
+    note: |
+      You are entering execute. Verify there is an answered request_approval. Discover
+      the right Composio actions for the channel. Send in small batches; pause to check.
+  measure:
+    note: |
+      You are entering measure. Pull metrics from the real tool-of-record. Do not
+      estimate. Compare to the original hypothesis verbatim.
+  learn:
+    note: |
+      You are entering learn. Save at least one memory_save(type="learning", ...) with a
+      confidence that reflects reproducibility.
+
+on_pause:
+  note: |
+    The experiment was paused. Save a memory with what was the last known good state and
+    why the pause happened.

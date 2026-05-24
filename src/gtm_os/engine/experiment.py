@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..config import Config
-from ..types import AgentResult, Experiment, Primitives
+from ..types import Experiment, Primitives
 from .composio_tools import ComposioIntegration, build_composio_tools
 from .context import assemble_context
 from .context_manager import ContextManager
@@ -17,7 +17,6 @@ from .harness import HarnessOptions, run_agent
 from .loader import load_primitives
 from .memory import VectorMemory
 from .store import Store
-
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ PHASE_AGENT = {
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 @dataclass
@@ -123,7 +122,7 @@ class ExperimentRunner:
     def transition_phase(
         self, experiment_id: str, new_phase: str, reason: str | None = None
     ) -> Experiment | None:
-        if new_phase not in PHASE_ORDER + ["paused"]:
+        if new_phase not in [*PHASE_ORDER, "paused"]:
             raise ValueError(f"unknown phase: {new_phase}")
         return self.store.update_experiment(experiment_id, phase=new_phase)
 
@@ -202,7 +201,7 @@ class ExperimentRunner:
                 config=self.config.llm,
                 options=HarnessOptions(max_iterations=15),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("agent run failed")
             self.store.finish_run(run.id, status="failed", error=str(exc))
             return RunOutcome(

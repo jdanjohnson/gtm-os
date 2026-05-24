@@ -8,10 +8,10 @@ human approval.
 from __future__ import annotations
 
 import logging
-from typing import Any, TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from croniter import croniter
-from datetime import datetime, timedelta, timezone
 
 from ..types import Tool
 
@@ -28,26 +28,26 @@ PHASES = ["design", "build", "execute", "measure", "learn", "complete", "paused"
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _next_run_from_cron(expr: str) -> str:
-    base = datetime.now(timezone.utc)
+    base = datetime.now(UTC)
     itr = croniter(expr, base)
-    return itr.get_next(datetime).astimezone(timezone.utc).isoformat(timespec="seconds")
+    return itr.get_next(datetime).astimezone(UTC).isoformat(timespec="seconds")
 
 
 def _next_run_from_interval(seconds: int) -> str:
-    return (datetime.now(timezone.utc) + timedelta(seconds=int(seconds))).isoformat(
+    return (datetime.now(UTC) + timedelta(seconds=int(seconds))).isoformat(
         timespec="seconds"
     )
 
 
 def build_custom_tools(
     *,
-    store: "Store",
-    memory: "VectorMemory",
-    runner: "ExperimentRunner | None" = None,
+    store: Store,
+    memory: VectorMemory,
+    runner: ExperimentRunner | None = None,
     play_ids: list[str] | None = None,
 ) -> list[Tool]:
     play_id_enum = play_ids or []

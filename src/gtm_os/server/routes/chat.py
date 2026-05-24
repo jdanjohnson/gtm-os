@@ -12,9 +12,8 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from ...engine.context import assemble_context
-from ...engine.harness import HarnessOptions, stream_agent_events
 from ...engine.experiment import PHASE_AGENT
-
+from ...engine.harness import HarnessOptions, stream_agent_events
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -141,7 +140,7 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
                             }
                         ),
                     }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("chat stream failed")
             yield {"event": "error", "data": json.dumps({"message": str(exc)})}
 
