@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "primitives_dir": "./primitives",
@@ -19,7 +20,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_consecutive_failures": 3,
     },
     "llm": {
-        "model": "openai/gpt-4o-mini",
+        "model": "anthropic/claude-sonnet-4",
         "embedding_model": "openai/text-embedding-3-small",
         "temperature": 0.4,
         "max_tokens": 4096,
@@ -48,7 +49,7 @@ class SchedulerConfig:
 
 @dataclass
 class LLMConfig:
-    model: str = "openai/gpt-4o-mini"
+    model: str = "anthropic/claude-sonnet-4"
     embedding_model: str = "openai/text-embedding-3-small"
     temperature: float = 0.4
     max_tokens: int = 4096
@@ -103,6 +104,11 @@ def find_project_root(start: Path | None = None) -> Path:
 def load_config(config_path: Path | None = None) -> Config:
     """Load configuration from `config_path` or auto-discover."""
     root = config_path.parent if config_path else find_project_root()
+
+    # Auto-load .env from project root so users don't need to export keys manually.
+    env_file = root / ".env"
+    if env_file.exists():
+        load_dotenv(env_file, override=False)
     raw: dict[str, Any] = {}
     path = config_path or (root / "gtm-os.config.yaml")
     if path.exists():
@@ -117,7 +123,7 @@ def load_config(config_path: Path | None = None) -> Config:
 
     llm_raw = merged.get("llm", {})
     llm = LLMConfig(
-        model=llm_raw.get("model", "openai/gpt-4o-mini"),
+        model=llm_raw.get("model", "anthropic/claude-sonnet-4"),
         embedding_model=llm_raw.get("embedding_model", "openai/text-embedding-3-small"),
         temperature=float(llm_raw.get("temperature", 0.4)),
         max_tokens=int(llm_raw.get("max_tokens", 4096)),

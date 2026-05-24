@@ -7,18 +7,23 @@ description: Test the GTM-OS frontend three-panel layout, sidebar navigation, ex
 
 ## Prerequisites
 - Server running: `uv run gtm-os start` from the repo root
-- `OPENROUTER_API_KEY` environment variable set
+- `ANTHROPIC_API_KEY` in `.env` file (or environment)
 - `gtm-os.config.yaml` in repo root with valid model ID
 
 ## Devin Secrets Needed
-- `OPENROUTER_API_KEY` — OpenRouter API key for LLM calls
+- `ANTHROPIC_API_KEY` — Anthropic API key for LLM calls
 
 ## Config Setup
+Create `.env` in repo root (gitignored) with your API key:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
 Create `gtm-os.config.yaml` in repo root (gitignored):
 ```yaml
 llm:
-  model: "openrouter/anthropic/claude-sonnet-4"
-  embedding_model: "openrouter/openai/text-embedding-3-small"
+  model: "anthropic/claude-sonnet-4"
+  embedding_model: "openai/text-embedding-3-small"
   temperature: 0.4
   max_tokens: 4096
   request_timeout_seconds: 120
@@ -29,19 +34,12 @@ scheduler:
   enabled: false
 ```
 
-**Important:** OpenRouter model IDs might change over time. If you get a `BadRequestError` about invalid model ID, query the OpenRouter models API to find valid IDs:
-```python
-import httpx, os
-r = httpx.get('https://openrouter.ai/api/v1/models', headers={'Authorization': f'Bearer {os.environ["OPENROUTER_API_KEY"]}'})
-models = r.json().get('data', [])
-claude = [m['id'] for m in models if 'claude' in m['id'].lower() and 'sonnet' in m['id'].lower()]
-for m in sorted(claude): print(m)
-```
+The server auto-loads `.env` on startup — no need to export keys manually.
 
 ## Starting the Server
 ```bash
 cd /home/ubuntu/repos/gtm-os
-OPENROUTER_API_KEY=$OPENROUTER_API_KEY uv run gtm-os start
+uv run gtm-os start
 ```
 Use a separate shell session for the server. Verify with:
 ```bash

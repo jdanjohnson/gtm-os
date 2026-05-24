@@ -22,6 +22,7 @@ dependencies = [
     "watchfiles>=0.24.0",
     "numpy>=1.26.0",
     "croniter>=3.0.3",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

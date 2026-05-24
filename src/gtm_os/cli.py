@@ -110,7 +110,7 @@ def init(
             shutil.copy(example_path, cfg_path)
         else:
             cfg_path.write_text(
-                "primitives_dir: ./primitives\ndata_dir: ./data\nllm:\n  model: openai/gpt-4o-mini\n",
+                "primitives_dir: ./primitives\ndata_dir: ./data\nllm:\n  model: anthropic/claude-sonnet-4\n",
                 encoding="utf-8",
             )
         console.print(f"[green]Wrote {cfg_path}[/green]")
@@ -118,7 +118,7 @@ def init(
     data_dir = target / "data"
     data_dir.mkdir(exist_ok=True)
     console.print(
-        "[green]Ready.[/green]  Next: set OPENAI_API_KEY (or another provider) and run `gtm-os start`."
+        "[green]Ready.[/green]  Next: add ANTHROPIC_API_KEY to .env and run `gtm-os start`."
     )
 
 
