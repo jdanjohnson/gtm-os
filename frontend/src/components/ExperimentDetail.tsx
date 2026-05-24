@@ -358,7 +358,7 @@ function ScheduleForm({
         />
         <button
           onClick={submit}
-          disabled={busy}
+          disabled={busy || !cron.trim()}
           className="glass-btn px-3 py-1.5 text-xs disabled:opacity-40"
         >
           {busy ? "saving..." : "Save Schedule"}

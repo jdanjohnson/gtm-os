@@ -194,18 +194,19 @@ export default function App() {
             {view === "automations" && <AutomationsView />}
           </main>
 
-          {/* Persistent Chat Panel */}
-          {chatOpen && (
-            <div className="glass-chat-panel animate-fade-in" style={{ height: "340px", minHeight: "280px" }}>
-              <Chat
-                experimentId={selectedExperiment}
-                primitives={primitives}
-                defaultAgent={chatAgent}
-                onAgentChange={setChatAgent}
-                compact
-              />
-            </div>
-          )}
+          {/* Persistent Chat Panel — always mounted, hidden via CSS to preserve state */}
+          <div
+            className="glass-chat-panel animate-fade-in"
+            style={{ height: chatOpen ? "340px" : "0px", minHeight: chatOpen ? "280px" : "0px", overflow: "hidden", transition: "height 0.2s ease, min-height 0.2s ease" }}
+          >
+            <Chat
+              experimentId={selectedExperiment}
+              primitives={primitives}
+              defaultAgent={chatAgent}
+              onAgentChange={setChatAgent}
+              compact
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -103,7 +103,7 @@ export default function ExperimentList({ selectedId, onSelect, primitives }: Pro
               <div className="flex-1 h-1 overflow-hidden rounded-full bg-slate-800/80">
                 <div
                   className="h-full rounded-full bg-emerald-500/50 transition-all"
-                  style={{ width: `${Math.min(100, (e.tokens_used / e.token_budget) * 100)}%` }}
+                  style={{ width: `${e.token_budget > 0 ? Math.min(100, (e.tokens_used / e.token_budget) * 100) : 0}%` }}
                 />
               </div>
               <span className="text-[10px] text-slate-500 shrink-0">
