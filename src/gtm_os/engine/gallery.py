@@ -7,7 +7,6 @@ from typing import Any
 
 import yaml
 
-
 GalleryKind = str  # "playbook" | "workflow" | "skill" | "tool"
 
 _KINDS = ("playbooks", "workflows", "skills", "tools")
@@ -25,7 +24,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 class GalleryItem:
     """Single gallery entry (playbook, workflow, skill, or tool)."""
 
-    __slots__ = ("kind", "id", "name", "description", "category", "tags", "data", "path")
+    __slots__ = ("category", "data", "description", "id", "kind", "name", "path", "tags")
 
     def __init__(self, data: dict[str, Any], path: Path) -> None:
         self.kind: str = data.get("kind", "unknown")

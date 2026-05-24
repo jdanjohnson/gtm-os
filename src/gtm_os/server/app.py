@@ -96,7 +96,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(memory_route.router, prefix="/api")
 
     # Initialize the gallery from the gallery/ directory.
-    gallery_dir = Path(cfg.primitives_dir).parent / "gallery"
+    gallery_dir = cfg.project_root / "gallery"
     if gallery_dir.exists():
         gallery_route.init_gallery(str(gallery_dir))
 

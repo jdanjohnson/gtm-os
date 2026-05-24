@@ -12,14 +12,14 @@ _gallery: Gallery | None = None
 
 
 def _get_gallery() -> Gallery:
-    global _gallery  # noqa: PLW0603
+    global _gallery
     if _gallery is None:
         _gallery = Gallery()
     return _gallery
 
 
 def init_gallery(gallery_dir: str) -> None:
-    global _gallery  # noqa: PLW0603
+    global _gallery
     _gallery = Gallery(gallery_dir)
 
 
