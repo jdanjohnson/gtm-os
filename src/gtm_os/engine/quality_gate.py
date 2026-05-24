@@ -83,11 +83,14 @@ async def evaluate_content(
             for m in past_learnings[:10]
         )
 
+    def _escape_braces(s: str) -> str:
+        return s.replace("{", "{{").replace("}", "}}")
+
     prompt = EVALUATION_PROMPT.format(
-        brand_context=brand_context or "(no brand context)",
-        rules_context=rules_context or "(no rules)",
-        learnings_context=learnings_context or "(no learnings)",
-        content=content[:3000],
+        brand_context=_escape_braces(brand_context or "(no brand context)"),
+        rules_context=_escape_braces(rules_context or "(no rules)"),
+        learnings_context=_escape_braces(learnings_context or "(no learnings)"),
+        content=_escape_braces(content[:3000]),
     )
 
     try:
