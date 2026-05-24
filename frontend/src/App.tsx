@@ -12,6 +12,7 @@ import MemoryBrowser from "./components/MemoryBrowser";
 import AgentsView from "./components/AgentsView";
 import AutomationsView from "./components/AutomationsView";
 import RulesView from "./components/RulesView";
+import Settings from "./components/Settings";
 import {
   Experiment,
   getHealth,
@@ -174,7 +175,7 @@ export default function App() {
       case "rules":
         return <RulesView />;
       case "settings":
-        return <SettingsPlaceholder health={health} />;
+        return <Settings />;
       default:
         return null;
     }
@@ -304,31 +305,6 @@ function ExperimentListView({
   );
 }
 
-function SettingsPlaceholder({ health }: { health: Awaited<ReturnType<typeof getHealth>> | null }) {
-  return (
-    <div className="p-6">
-      <h1 className="mb-4 text-xl font-semibold">Settings</h1>
-      <div className="space-y-4 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4 text-sm">
-        <div>
-          <span className="text-[#A1A1AA]">Model:</span>{" "}
-          <span className="font-mono">{health?.model ?? "—"}</span>
-        </div>
-        <div>
-          <span className="text-[#A1A1AA]">Composio:</span>{" "}
-          <span>{health?.composio_configured ? "Connected" : "Not configured"}</span>
-        </div>
-        <div>
-          <span className="text-[#A1A1AA]">Scheduler:</span>{" "}
-          <span>{health?.scheduler_running ? "Running" : "Stopped"}</span>
-        </div>
-        <div>
-          <span className="text-[#A1A1AA]">Primitives:</span>{" "}
-          <span className="font-mono text-xs">{health?.primitives_dir ?? "—"}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function phaseColor(phase: string) {
   const map: Record<string, string> = {

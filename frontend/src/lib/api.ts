@@ -177,6 +177,33 @@ export async function getPrimitives() {
   return json<PrimitivesSummary>("/api/primitives");
 }
 
+export interface BrandIdentity {
+  company_name: string;
+  tagline: string;
+  website: string;
+  product_description: string;
+  social: Record<string, string>;
+  icp: string;
+  icp_negative: string;
+  voice: string[];
+  avoid: string[];
+  prefer: string[];
+  email_max_sentences: number;
+  email_max_words: number;
+  brand_body?: string;
+}
+
+export async function getBrand() {
+  return json<BrandIdentity>("/api/brand");
+}
+
+export async function updateBrand(body: Omit<BrandIdentity, "brand_body">) {
+  return json<BrandIdentity>("/api/brand", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function getThreadMessages(threadId: string) {
   return json<{ thread_id: string; messages: ThreadMessage[] }>(
     `/api/threads/${threadId}/messages`,
