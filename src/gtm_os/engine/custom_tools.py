@@ -3,6 +3,9 @@
 These are the tools that let the agent operate on the GTM-OS state itself: create
 experiments, save / search memory, schedule task ticks, transition phases, request
 human approval.
+
+Also includes research tools (browser, scraper, search, CSV, PDF, YouTube) and
+TrustCall-style structured extraction via JSON Patch.
 """
 
 from __future__ import annotations
@@ -14,6 +17,15 @@ from typing import TYPE_CHECKING, Any
 from croniter import croniter
 
 from ..types import Tool
+from .research_tools import (
+    BrowserTool,
+    CSVParserTool,
+    PDFParserTool,
+    WebScraperTool,
+    WebSearchTool,
+    YouTubeSearchTool,
+)
+from .trustcall import apply_patches, parse_llm_patches
 
 if TYPE_CHECKING:  # pragma: no cover
     from .experiment import ExperimentRunner
@@ -39,6 +51,278 @@ def _next_run_from_cron(expr: str) -> str:
 
 def _next_run_from_interval(seconds: int) -> str:
     return (datetime.now(UTC) + timedelta(seconds=int(seconds))).isoformat(timespec="seconds")
+
+
+def _build_research_tools() -> list[Tool]:
+    """Build PraisonAI-inspired research tools for prospect research and market analysis."""
+    _browser = BrowserTool()
+    _scraper = WebScraperTool()
+    _search = WebSearchTool()
+    _csv = CSVParserTool()
+    _pdf = PDFParserTool()
+    _youtube = YouTubeSearchTool()
+
+    async def _browser_fetch(url: str) -> dict[str, Any]:
+        return _browser.fetch(url)
+
+    async def _scrape_website(url: str) -> dict[str, Any]:
+        return _scraper.scrape(url)
+
+    async def _web_search(
+        query: str,
+        num_results: int = 10,
+        search_type: str = "search",
+    ) -> dict[str, Any]:
+        return _search.search(query, num_results=int(num_results), search_type=search_type)
+
+    async def _search_prospects(
+        industry: str,
+        title: str,
+        location: str = "",
+    ) -> dict[str, Any]:
+        return _search.search_prospects(industry, title, location)
+
+    async def _csv_search(
+        file_path: str,
+        query: str,
+        column: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return _csv.search(file_path, query, column=column, limit=int(limit))
+
+    async def _pdf_search(
+        file_path: str,
+        query: str,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        return _pdf.search(file_path, query, limit=int(limit))
+
+    async def _youtube_search(
+        query: str,
+        search_type: str = "video",
+        max_results: int = 5,
+    ) -> dict[str, Any]:
+        if search_type == "channel":
+            return _youtube.search_channels(query, max_results=int(max_results))
+        return _youtube.search_videos(query, max_results=int(max_results))
+
+    return [
+        Tool(
+            name="browser_fetch",
+            description=(
+                "Fetch a web page and extract its text content. Use for prospect research, "
+                "competitor analysis, or reading any URL."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to fetch"},
+                },
+                "required": ["url"],
+            },
+            execute=_browser_fetch,
+        ),
+        Tool(
+            name="scrape_website",
+            description=(
+                "Scrape a website and extract structured data: emails, phone numbers, "
+                "social links, headings, and key business pages."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to scrape"},
+                },
+                "required": ["url"],
+            },
+            execute=_scrape_website,
+        ),
+        Tool(
+            name="web_search",
+            description=(
+                "Search Google via Serper or Brave API. Use for market research, "
+                "competitor analysis, and prospect discovery."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "num_results": {"type": "integer", "default": 10},
+                    "search_type": {
+                        "type": "string",
+                        "enum": ["search", "news", "images", "places"],
+                        "default": "search",
+                    },
+                },
+                "required": ["query"],
+            },
+            execute=_web_search,
+        ),
+        Tool(
+            name="search_prospects",
+            description=(
+                "Search for prospects matching ICP criteria on LinkedIn. "
+                "Provide industry and title; optionally location."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "industry": {"type": "string"},
+                    "title": {"type": "string", "description": "Job title to search for"},
+                    "location": {"type": "string", "default": ""},
+                },
+                "required": ["industry", "title"],
+            },
+            execute=_search_prospects,
+        ),
+        Tool(
+            name="csv_search",
+            description=(
+                "Search a CSV prospect list for rows matching a query. "
+                "Optionally filter by a specific column."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to CSV file"},
+                    "query": {"type": "string", "description": "Search query"},
+                    "column": {"type": "string", "description": "Column to search in (optional)"},
+                    "limit": {"type": "integer", "default": 20},
+                },
+                "required": ["file_path", "query"],
+            },
+            execute=_csv_search,
+        ),
+        Tool(
+            name="pdf_search",
+            description=(
+                "Search a PDF report for paragraphs matching a query. "
+                "Useful for extracting data from prospect reports or market research."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to PDF file"},
+                    "query": {"type": "string", "description": "Search query"},
+                    "limit": {"type": "integer", "default": 10},
+                },
+                "required": ["file_path", "query"],
+            },
+            execute=_pdf_search,
+        ),
+        Tool(
+            name="youtube_search",
+            description=(
+                "Search YouTube for channels or videos. Use for finding prospect content "
+                "to personalize outreach."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "search_type": {
+                        "type": "string",
+                        "enum": ["video", "channel"],
+                        "default": "video",
+                    },
+                    "max_results": {"type": "integer", "default": 5},
+                },
+                "required": ["query"],
+            },
+            execute=_youtube_search,
+        ),
+    ]
+
+
+def _build_trustcall_tools(store: Store) -> list[Tool]:
+    """Build TrustCall-style JSON Patch tools for reliable structured extraction."""
+
+    async def _structured_extract(patches: list[dict[str, Any]]) -> dict[str, Any]:
+        """Apply JSON Patch operations to build a structured document from scratch."""
+        ops = parse_llm_patches({"patches": patches})
+        result = apply_patches({}, ops, atomic=False)
+        return {
+            "ok": result.success,
+            "document": result.document,
+            "applied_count": len(result.applied),
+            "failed_count": len(result.failed),
+            "errors": [f"{op.path}: {err}" for op, err in result.failed] if result.failed else [],
+        }
+
+    async def _patch_experiment(
+        experiment_id: str,
+        patches: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Apply JSON Patch operations to an experiment's config."""
+        exp = store.get_experiment(experiment_id)
+        if not exp:
+            return {"ok": False, "error": "experiment_not_found"}
+        ops = parse_llm_patches({"patches": patches})
+        result = apply_patches(exp.config, ops, atomic=True)
+        if result.success:
+            store.update_experiment(experiment_id, config=result.document)
+            return {
+                "ok": True,
+                "experiment_id": experiment_id,
+                "config": result.document,
+                "applied_count": len(result.applied),
+            }
+        errors = [f"{op.path}: {err}" for op, err in result.failed]
+        return {"ok": False, "errors": errors}
+
+    patch_items_schema = {
+        "type": "array",
+        "description": "JSON Patch (RFC 6902) operations",
+        "items": {
+            "type": "object",
+            "properties": {
+                "op": {
+                    "type": "string",
+                    "enum": ["add", "remove", "replace", "move", "copy", "test"],
+                },
+                "path": {
+                    "type": "string",
+                    "description": "JSON Pointer (e.g. /icp/industry, /metrics/open_rate)",
+                },
+                "value": {"description": "Value for add/replace/test"},
+                "from": {"type": "string", "description": "Source path for move/copy"},
+            },
+            "required": ["op", "path"],
+        },
+    }
+
+    return [
+        Tool(
+            name="structured_extract",
+            description=(
+                "Extract structured data by emitting JSON Patch operations against an "
+                "empty document. Use 'add' with paths like /name, /icp/industry, "
+                "/metrics/open_rate. More reliable than generating full JSON."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {"patches": patch_items_schema},
+                "required": ["patches"],
+            },
+            execute=_structured_extract,
+        ),
+        Tool(
+            name="patch_experiment_config",
+            description=(
+                "Update an experiment's config using JSON Patch operations. "
+                "Safer than replacing the entire config — only changes what you specify."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"},
+                    "patches": patch_items_schema,
+                },
+                "required": ["experiment_id", "patches"],
+            },
+            execute=_patch_experiment,
+        ),
+    ]
 
 
 def build_custom_tools(
@@ -644,4 +928,8 @@ def build_custom_tools(
             },
             execute=_evaluate_quality,
         ),
+        # --- Research tools (PraisonAI-inspired) ---
+        *_build_research_tools(),
+        # --- TrustCall: JSON Patch structured extraction ---
+        *_build_trustcall_tools(store),
     ]
