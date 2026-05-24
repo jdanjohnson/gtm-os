@@ -109,6 +109,57 @@ SCHEMA_STATEMENTS: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_memory_type ON memory(type)",
     "CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(enabled, next_run_at)",
+    # WS3B: Structured metrics.
+    """
+    CREATE TABLE IF NOT EXISTS metrics (
+        id              TEXT PRIMARY KEY,
+        experiment_id   TEXT NOT NULL,
+        run_id          TEXT,
+        metric_name     TEXT NOT NULL,
+        metric_value    REAL NOT NULL,
+        variant         TEXT,
+        measured_at     TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_metrics_experiment ON metrics(experiment_id, metric_name)",
+    # WS3D: Experiment templates.
+    """
+    CREATE TABLE IF NOT EXISTS templates (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        description     TEXT,
+        play_ids        TEXT,
+        config          TEXT,
+        hypothesis_pattern TEXT,
+        token_budget    INTEGER DEFAULT 200000,
+        created_from    TEXT,
+        created_at      TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    # WS8C: Trust scores for progressive autonomy.
+    """
+    CREATE TABLE IF NOT EXISTS trust_scores (
+        experiment_type TEXT PRIMARY KEY,
+        score           REAL DEFAULT 0.0,
+        experiments_run INTEGER DEFAULT 0,
+        experiments_succeeded INTEGER DEFAULT 0,
+        last_updated    TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    # WS8D: Proposed experiments queue.
+    """
+    CREATE TABLE IF NOT EXISTS proposed_experiments (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        hypothesis      TEXT,
+        play_ids        TEXT,
+        rationale       TEXT,
+        source_experiment_id TEXT,
+        status          TEXT DEFAULT 'pending',
+        created_at      TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_proposed_status ON proposed_experiments(status)",
 ]
 
 
@@ -598,6 +649,212 @@ class Store:
     def delete_schedule(self, schedule_id: str) -> None:
         with self._lock, self._conn:
             self._conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+
+    # ---------- metrics (WS3B) ----------
+
+    def save_metric(
+        self,
+        *,
+        experiment_id: str,
+        metric_name: str,
+        metric_value: float,
+        run_id: str | None = None,
+        variant: str | None = None,
+    ) -> str:
+        metric_id = _new_id()
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO metrics(id, experiment_id, run_id, metric_name, metric_value, variant, measured_at)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (metric_id, experiment_id, run_id, metric_name, float(metric_value), variant, _now()),
+            )
+        return metric_id
+
+    def list_metrics(
+        self,
+        experiment_id: str,
+        *,
+        metric_name: str | None = None,
+        variant: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM metrics WHERE experiment_id = ?"
+        params: list[Any] = [experiment_id]
+        if metric_name:
+            sql += " AND metric_name = ?"
+            params.append(metric_name)
+        if variant:
+            sql += " AND variant = ?"
+            params.append(variant)
+        sql += " ORDER BY datetime(measured_at) DESC LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_metric_summary(self, experiment_id: str) -> dict[str, Any]:
+        """Aggregate metrics: avg, min, max per metric_name for an experiment."""
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT metric_name, variant,
+                       COUNT(*) as count,
+                       AVG(metric_value) as avg_value,
+                       MIN(metric_value) as min_value,
+                       MAX(metric_value) as max_value
+                FROM metrics WHERE experiment_id = ?
+                GROUP BY metric_name, variant
+                """,
+                (experiment_id,),
+            ).fetchall()
+        return {
+            "experiment_id": experiment_id,
+            "metrics": [dict(r) for r in rows],
+        }
+
+    # ---------- templates (WS3D) ----------
+
+    def save_template(
+        self,
+        *,
+        name: str,
+        description: str | None = None,
+        play_ids: list[str] | None = None,
+        config: dict[str, Any] | None = None,
+        hypothesis_pattern: str | None = None,
+        token_budget: int = 200_000,
+        created_from: str | None = None,
+    ) -> str:
+        template_id = _new_id()
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO templates(id, name, description, play_ids, config, hypothesis_pattern,
+                                      token_budget, created_from, created_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    template_id, name, description,
+                    json.dumps(play_ids or []), json.dumps(config or {}),
+                    hypothesis_pattern, int(token_budget), created_from, _now(),
+                ),
+            )
+        return template_id
+
+    def get_template(self, template_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_templates(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM templates ORDER BY datetime(created_at) DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ---------- trust scores (WS8C) ----------
+
+    def get_trust_score(self, experiment_type: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM trust_scores WHERE experiment_type = ?", (experiment_type,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def upsert_trust_score(
+        self,
+        experiment_type: str,
+        *,
+        score_delta: float = 0.0,
+        ran: bool = False,
+        succeeded: bool = False,
+    ) -> dict[str, Any]:
+        existing = self.get_trust_score(experiment_type)
+        if existing:
+            new_score = max(0.0, min(1.0, float(existing["score"]) + score_delta))
+            runs = int(existing["experiments_run"]) + (1 if ran else 0)
+            wins = int(existing["experiments_succeeded"]) + (1 if succeeded else 0)
+            with self._lock, self._conn:
+                self._conn.execute(
+                    """
+                    UPDATE trust_scores SET score = ?, experiments_run = ?,
+                    experiments_succeeded = ?, last_updated = ? WHERE experiment_type = ?
+                    """,
+                    (new_score, runs, wins, _now(), experiment_type),
+                )
+        else:
+            new_score = max(0.0, min(1.0, score_delta))
+            with self._lock, self._conn:
+                self._conn.execute(
+                    """
+                    INSERT INTO trust_scores(experiment_type, score, experiments_run,
+                    experiments_succeeded, last_updated)
+                    VALUES(?,?,?,?,?)
+                    """,
+                    (experiment_type, new_score, 1 if ran else 0, 1 if succeeded else 0, _now()),
+                )
+        return self.get_trust_score(experiment_type)  # type: ignore[return-value]
+
+    def list_trust_scores(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM trust_scores ORDER BY score DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ---------- proposed experiments (WS8D) ----------
+
+    def propose_experiment(
+        self,
+        *,
+        name: str,
+        hypothesis: str | None = None,
+        play_ids: list[str] | None = None,
+        rationale: str | None = None,
+        source_experiment_id: str | None = None,
+    ) -> str:
+        prop_id = _new_id()
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO proposed_experiments(id, name, hypothesis, play_ids, rationale,
+                source_experiment_id, status, created_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    prop_id, name, hypothesis, json.dumps(play_ids or []),
+                    rationale, source_experiment_id, "pending", _now(),
+                ),
+            )
+        return prop_id
+
+    def list_proposed_experiments(self, status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM proposed_experiments"
+        params: list[Any] = []
+        if status:
+            sql += " WHERE status = ?"
+            params.append(status)
+        sql += " ORDER BY datetime(created_at) DESC LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            if d.get("play_ids"):
+                d["play_ids"] = _json_or(d["play_ids"], [])
+            out.append(d)
+        return out
+
+    def update_proposed_experiment(self, prop_id: str, status: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE proposed_experiments SET status = ? WHERE id = ?",
+                (status, prop_id),
+            )
 
 
 def _row_to_experiment(row: sqlite3.Row) -> Experiment:

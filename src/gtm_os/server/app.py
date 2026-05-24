@@ -21,6 +21,9 @@ from ..engine.store import Store
 from .routes import chat as chat_route
 from .routes import experiments as experiments_route
 from .routes import memory as memory_route
+from .routes import metrics as metrics_route
+from .routes import templates as templates_route
+from .routes import trust as trust_route
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +95,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(chat_route.router, prefix="/api")
     app.include_router(experiments_route.router, prefix="/api")
     app.include_router(memory_route.router, prefix="/api")
+    app.include_router(metrics_route.router, prefix="/api")
+    app.include_router(templates_route.router, prefix="/api")
+    app.include_router(trust_route.router, prefix="/api")
 
     # Static frontend.
     frontend_dir = Path(__file__).resolve().parent / "frontend_dist"
