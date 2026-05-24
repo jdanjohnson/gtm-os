@@ -180,9 +180,9 @@ export default function Settings() {
               >
                 {intSaving ? "Saving…" : "Save Keys"}
               </button>
-              {intSaved && <span className="text-xs text-emerald-400">Keys saved & reloaded</span>}
             </div>
           )}
+          {intSaved && <span className="text-xs text-emerald-400">Keys saved & reloaded</span>}
         </div>
       </Section>
 

@@ -456,8 +456,9 @@ def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None 
     if phase == "build":
         return (
             f"{base} Build the assets: prospect list, copy, scripts, or content. "
-            "Use composio_discover_tools / composio_execute_action or pipedream_list_apps / "
-            "pipedream_run_action for real integrations. "
+            "Bias toward doing the work yourself — draft copy, create lists, write scripts. "
+            "If you need to connect to external services (email, CRM, search), "
+            "Composio and Pipedream tools are available as optional accelerators. "
             "When complete, use request_approval(experiment_id, message) and wait — "
             "DO NOT transition to 'execute' yourself."
             f"{play_context}"
@@ -465,7 +466,8 @@ def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None 
     if phase == "execute":
         return (
             f"{base} Execute the play. Respect channel rules and rate limits. "
-            "Track what was sent and to whom. Use tools to actually deliver. "
+            "Track what was sent and to whom. Use every tool at your disposal to deliver — "
+            "Composio and Pipedream are available if you need external service connections. "
             "When execution is complete, transition to 'measure'."
             f"{play_context}"
         )
