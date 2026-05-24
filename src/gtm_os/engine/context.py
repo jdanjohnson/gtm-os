@@ -74,9 +74,16 @@ def assemble_context(
             if play:
                 sections.append(_section(f"Play: {pid}", play))
     elif primitives.plays:
-        # Surface play names so the orchestrator can pick one when no experiment is loaded.
-        listing = "\n".join(f"- {pid}" for pid in sorted(primitives.plays.keys()))
-        sections.append(_section("Available plays", listing))
+        # Surface play catalog so the orchestrator knows what's available.
+        lines: list[str] = []
+        for pid in sorted(primitives.plays.keys()):
+            meta = primitives.play_meta.get(pid)
+            if meta and meta.description:
+                lines.append(f"- **{meta.name}** (`{pid}`, {meta.kind}): {meta.description}")
+            else:
+                lines.append(f"- `{pid}`")
+        listing = "\n".join(lines)
+        sections.append(_section("Available plays (use list_plays/get_play tools for details)", listing))
 
     # 7. Memories
     mem_list = list(relevant_memories or [])

@@ -108,6 +108,7 @@ class ExperimentRunner:
             memory=self.memory,
             runner=self,
             play_ids=play_ids,
+            primitives=primitives,
         )
         composio = build_composio_tools(self.composio)
         return custom + composio
