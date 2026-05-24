@@ -1,0 +1,53 @@
+kind: workflow
+id: content-write-optimize-publish
+name: Content Write → Optimize → Publish Pipeline
+description: Write long-form content from a research plan, run through 5 optimization agents, auto-revise if needed, publish.
+category: content
+tags: [content, writing, optimization, publishing]
+source_repos:
+  - TheCraigHewitt/seomachine
+
+steps:
+  - name: Write draft
+    input: article_plan, brand_voice, seo_guidelines
+    description: Write 2000-3000+ word article following the article plan with brand voice
+
+  - name: Scrub AI patterns
+    tool: content-scrubber
+    input: draft
+    description: Remove AI watermarks — zero-width spaces, format-control chars, excessive em-dashes
+
+  - name: Score content quality
+    tool: content-scorer
+    input: scrubbed_draft
+    description: Score across Humanity (30%), Specificity (25%), Structure (20%), SEO (15%), Readability (10%)
+    config:
+      threshold: 70
+      max_retries: 2
+
+  - name: Auto-revise if below threshold
+    input: scored_draft, priority_fixes
+    description: If score <70, apply priority fixes and re-score (up to 2 attempts)
+    conditional: score < 70
+
+  - name: Run optimization agents
+    description: Run 5 specialized agents sequentially
+    sub_steps:
+      - skill: seo-optimizer
+        description: On-page SEO recommendations
+      - tool: content-scorer
+        config: { mode: keyword-analysis }
+        description: Keyword density and placement analysis
+      - input: draft
+        description: Generate meta title and description options
+      - input: draft, internal_links_map
+        description: Suggest internal linking opportunities
+
+  - name: Publish
+    tool: wordpress-api
+    input: final_draft, meta_tags, internal_links
+    description: Publish to WordPress with Yoast SEO metadata
+    requires_approval: true
+
+tools: [content-scrubber, content-scorer, wordpress-api]
+skills: [seo-optimizer]

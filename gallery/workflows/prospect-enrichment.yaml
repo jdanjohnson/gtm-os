@@ -1,0 +1,50 @@
+kind: workflow
+id: prospect-enrichment
+name: Prospect Enrichment Pipeline
+description: Take raw prospect list, enrich with contact data, score against ICP, output approved rows ready for outreach.
+category: enrichment
+tags: [prospecting, data, enrichment, scoring]
+source_repos:
+  - kathrynwu/GTMbrain
+  - cluster-software/agent-crm
+
+steps:
+  - name: Load raw prospects
+    tool: csv-reader
+    input: prospects_csv
+    description: Read raw prospect list from CSV, Google Sheet, or CRM export
+
+  - name: Enrich with contact data
+    tool: apollo-api
+    input: company_name, title_filter
+    description: Find decision-maker contacts (name, email, phone, title) at each company
+
+  - name: LinkedIn profile enrichment
+    tool: browser-use
+    input: prospect_linkedin_url
+    description: Pull LinkedIn profile data for additional context (cached, 14-day TTL)
+    optional: true
+
+  - name: Score against ICP
+    skill: lead-scoring-model
+    input: enriched_prospect
+    description: Apply ICP scoring model — firmographic + signal weights
+
+  - name: Apply approved-row standard
+    tool: filter
+    config:
+      min_score: 70
+      required_fields: [email, decision_maker_name, company_domain]
+    description: Filter to only rows meeting the approved-row standard
+
+  - name: Tag with signals
+    description: Add why-now triggers — hiring, funding, tech migration, expansion signals
+    optional: true
+
+  - name: Output approved list
+    output: enriched_prospects
+    format: csv_or_crm
+    description: Save enriched, scored, approved prospect list
+
+tools: [csv-reader, apollo-api, browser-use, filter]
+skills: [lead-scoring-model]

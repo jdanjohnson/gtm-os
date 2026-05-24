@@ -1,0 +1,18 @@
+kind: skill
+id: email-template-generator
+name: Email Template Generator
+description: Professional email templates for various GTM scenarios.
+category: marketing
+tags:
+- email
+- templates
+- outreach
+source_repo: OneWave-AI/claude-skills
+input:
+- name: scenario
+  type: string
+  description: Email scenario type
+output:
+- name: templates
+  type: json
+  description: 3 template variants with subject lines

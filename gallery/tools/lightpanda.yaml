@@ -1,0 +1,19 @@
+kind: tool
+id: lightpanda
+name: Lightpanda
+description: Lightweight headless browser optimized for AI and automation — 60x faster
+  than Chromium.
+category: browser
+tags:
+- browser
+- headless
+- performance
+- ai
+source_repo: nichochar/nichochar
+install: See lightpanda.io for install
+capabilities:
+- 60x faster than Chromium headless
+- DOM access without full rendering
+- Playwright/Puppeteer compatible API
+- Minimal resource footprint
+integration_pattern: browser_engine

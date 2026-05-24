@@ -1,0 +1,18 @@
+kind: skill
+id: quota-setting-calculator
+name: Quota Setting Calculator
+description: Top-down vs bottom-up quota models.
+category: sales
+tags:
+- quota
+- planning
+- compensation
+source_repo: OneWave-AI/claude-skills
+input:
+- name: revenue_targets
+  type: json
+  description: Company revenue goals and rep count
+output:
+- name: quota_model
+  type: json
+  description: Per-rep quotas with comparison

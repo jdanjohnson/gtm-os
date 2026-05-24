@@ -1,0 +1,18 @@
+kind: skill
+id: meeting-intelligence
+name: Meeting Intelligence
+description: Extract decisions, action items, and sentiment from call transcripts.
+category: strategy
+tags:
+- meetings
+- transcripts
+- intelligence
+source_repo: OneWave-AI/claude-skills
+input:
+- name: transcript
+  type: markdown
+  description: Call or meeting transcript
+output:
+- name: intelligence
+  type: json
+  description: Decisions, action items, sentiment, key quotes

@@ -1,0 +1,19 @@
+kind: tool
+id: maigret
+name: Maigret
+description: OSINT username search across 3000+ sites with profile analysis.
+category: osint
+tags:
+- osint
+- usernames
+- social
+- intelligence
+source_repo: soxoj/maigret
+install: pip install maigret
+capabilities:
+- Search 3000+ websites by username
+- Profile correlation across platforms
+- HTML/PDF/JSON report generation
+- Tag-based site filtering
+- Recursive search from discovered profiles
+integration_pattern: cli

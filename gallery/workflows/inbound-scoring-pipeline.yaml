@@ -1,0 +1,52 @@
+kind: workflow
+id: inbound-scoring-pipeline
+name: Inbound Lead Scoring Pipeline
+description: Score inbound leads by ICP fit, intent signals, and urgency — route to sales (hot), nurture (warm), or archive (cold).
+category: inbound
+tags: [inbound, scoring, routing, qualification]
+source_repos:
+  - OneWave-AI/claude-skills
+
+steps:
+  - name: Receive inbound lead
+    input: lead_data
+    description: Accept lead from form submission, email, or inbound channel
+
+  - name: Enrich lead data
+    tool: llm-scraper
+    input: lead_company_url
+    description: Scrape company website for firmographic data (size, vertical, tech stack)
+    optional: true
+
+  - name: Score ICP fit
+    skill: inbound-lead-qualifier
+    input: lead_data, enriched_data
+    description: Score against ICP criteria — company fit, title fit, vertical fit
+
+  - name: Score intent
+    skill: intent-signal-aggregator
+    input: lead_company
+    description: Check for recent intent signals — job postings, tech changes, funding
+
+  - name: Score urgency
+    input: lead_message, lead_source
+    description: Assess urgency from message content and source (demo request = high, content download = low)
+
+  - name: Compute composite score
+    input: icp_score, intent_score, urgency_score
+    description: Weighted composite — ICP (40%), Intent (30%), Urgency (30%)
+
+  - name: Route lead
+    config:
+      hot_threshold: 70
+      warm_threshold: 40
+    output: routing_decision
+    description: "Hot (>70): route to AE immediately. Warm (40-70): add to nurture. Cold (<40): archive."
+
+  - name: Log to CRM
+    tool: acrm-cli
+    input: lead_data, score, routing
+    description: Create lead record with score and routing decision
+
+tools: [llm-scraper, acrm-cli]
+skills: [inbound-lead-qualifier, intent-signal-aggregator]

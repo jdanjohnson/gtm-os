@@ -1,0 +1,18 @@
+kind: skill
+id: social-repurposer
+name: Social Repurposer
+description: Adapt content for different social platforms.
+category: marketing
+tags:
+- social
+- repurposing
+- platforms
+source_repo: OneWave-AI/claude-skills
+input:
+- name: source_content
+  type: markdown
+  description: Original content to adapt
+output:
+- name: social_posts
+  type: json
+  description: Platform-specific posts (X, LinkedIn, etc.)

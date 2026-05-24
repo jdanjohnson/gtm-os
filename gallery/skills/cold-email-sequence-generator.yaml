@@ -1,0 +1,18 @@
+kind: skill
+id: cold-email-sequence-generator
+name: Cold Email Sequence Generator
+description: Generate multi-touch outbound campaigns optimized for response.
+category: sales
+tags:
+- email
+- outbound
+- sequences
+source_repo: OneWave-AI/claude-skills
+input:
+- name: prospect_data
+  type: json
+  description: Prospect name, company, role, context
+output:
+- name: email_sequence
+  type: json
+  description: Multi-touch sequence with subject lines and body copy

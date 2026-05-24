@@ -1,0 +1,59 @@
+kind: playbook
+id: deep-research-report
+name: Deep Research Report
+description: Generate comprehensive, cited research reports on any GTM-relevant topic — competitor analysis, market maps, ICP research, trend reports, battlecards.
+category: research
+tags: [research, reports, intelligence, citations]
+source_repo: stanford-oval/storm
+
+outcome:
+  goal: Produce a publication-quality research report with citations that informs GTM strategy
+  hypothesis: AI-generated research reports with multi-source citation and expert persona simulation match the quality of analyst reports at 1/10th the time.
+  success_metrics:
+    - metric: citation_count
+      target: ">20 unique sources per report"
+    - metric: production_time
+      target: "<2 hours per report"
+    - metric: actionability_score
+      target: ">80% of readers rate it actionable"
+
+knowledge:
+  - id: topic-context
+    description: What the user already knows, what gaps need filling
+    required: true
+  - id: source-preferences
+    description: Preferred sources, excluded domains, recency requirements
+    required: false
+
+workflows:
+  - storm-research-pipeline
+
+skills:
+  - market-sizing
+  - competitor-intel-agent
+  - competitor-content-analyzer
+
+tools:
+  - id: web-search
+    purpose: Multi-provider search (Bing, Serper, Brave, Tavily, Google, DuckDuckGo)
+  - id: llm-scraper
+    purpose: Extract structured data from research sources
+  - id: vector-store
+    purpose: Semantic search over collected research for section writing
+
+agent:
+  role: Research Analyst
+  process: sequential
+  phases: [design, build, execute, measure, learn]
+
+experiments:
+  - name: Competitor Deep-Dive
+    description: Generate 5000-word report on a competitor's full GTM strategy
+  - name: Market Map
+    description: Research report on an entire market vertical with company comparisons
+  - name: ICP Research
+    description: Deep research on a buyer persona — pain points, watering holes, buying triggers
+  - name: Weekly Trend Report
+    description: Automated weekly trend report on your market
+  - name: Battlecard Generation
+    description: Research competitor products, generate sales battlecards with citations

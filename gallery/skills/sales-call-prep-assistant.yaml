@@ -1,0 +1,18 @@
+kind: skill
+id: sales-call-prep-assistant
+name: Sales Call Prep Assistant
+description: Pre-call research briefs with discovery questions.
+category: sales
+tags:
+- calls
+- research
+- preparation
+source_repo: OneWave-AI/claude-skills
+input:
+- name: contact_data
+  type: crm_record
+  description: Person and company data from CRM
+output:
+- name: call_brief
+  type: markdown
+  description: Research brief with talking points and discovery questions

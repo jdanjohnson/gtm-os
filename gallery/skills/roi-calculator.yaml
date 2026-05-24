@@ -1,0 +1,18 @@
+kind: skill
+id: roi-calculator
+name: ROI Calculator
+description: AI implementation ROI with sensitivity analysis.
+category: strategy
+tags:
+- roi
+- analysis
+- business-case
+source_repo: OneWave-AI/claude-skills
+input:
+- name: implementation_data
+  type: json
+  description: Costs, timeline, expected benefits
+output:
+- name: roi_analysis
+  type: json
+  description: ROI projections with sensitivity scenarios

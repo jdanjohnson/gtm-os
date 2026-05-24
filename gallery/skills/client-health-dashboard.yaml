@@ -1,0 +1,18 @@
+kind: skill
+id: client-health-dashboard
+name: Client Health Dashboard
+description: RAG status across all client accounts.
+category: strategy
+tags:
+- client-health
+- dashboard
+- monitoring
+source_repo: OneWave-AI/claude-skills
+input:
+- name: client_data
+  type: crm_export
+  description: All client accounts with health signals
+output:
+- name: dashboard
+  type: json
+  description: Red/Amber/Green status per account with risk factors

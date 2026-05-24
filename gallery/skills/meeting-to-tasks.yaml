@@ -1,0 +1,18 @@
+kind: skill
+id: meeting-to-tasks
+name: Meeting to Tasks
+description: Convert transcripts to action items with owner assignment.
+category: strategy
+tags:
+- meetings
+- tasks
+- action-items
+source_repo: OneWave-AI/claude-skills
+input:
+- name: transcript
+  type: markdown
+  description: Meeting transcript
+output:
+- name: tasks
+  type: json
+  description: Action items with owners, deadlines, and priority

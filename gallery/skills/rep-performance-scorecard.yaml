@@ -1,0 +1,18 @@
+kind: skill
+id: rep-performance-scorecard
+name: Rep Performance Scorecard
+description: Multi-dimensional rep evaluation.
+category: sales
+tags:
+- performance
+- coaching
+- metrics
+source_repo: OneWave-AI/claude-skills
+input:
+- name: rep_data
+  type: crm_export
+  description: Rep activity, pipeline, and revenue data
+output:
+- name: scorecard
+  type: json
+  description: Multi-dimensional scores with peer benchmarks

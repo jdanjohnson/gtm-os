@@ -1,0 +1,18 @@
+kind: skill
+id: client-proposal-generator
+name: Client Proposal Generator
+description: Full consulting proposals from a brief.
+category: strategy
+tags:
+- proposals
+- consulting
+- sales
+source_repo: OneWave-AI/claude-skills
+input:
+- name: brief
+  type: markdown
+  description: Client brief with requirements
+output:
+- name: proposal
+  type: markdown
+  description: Full proposal with scope, timeline, pricing, and terms
