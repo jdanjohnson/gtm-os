@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from ..types import BrandConfig, Primitives, RulesConfig, TriggersConfig
+from ..types import BrandConfig, PlayMeta, Primitives, RulesConfig, TriggersConfig
 
 
 def _read_text(path: Path) -> str:
@@ -73,12 +73,29 @@ def load_primitives(base_path: str | Path = "primitives") -> Primitives:
     plays_dir = base / "plays"
     if plays_dir.exists():
         for sub in sorted(plays_dir.iterdir()):
+            play_id: str | None = None
+            content: str = ""
             if sub.is_dir():
                 play_file = sub / "PLAY.md"
                 if play_file.exists():
-                    prim.plays[sub.name] = _read_text(play_file)
+                    play_id = sub.name
+                    content = _read_text(play_file)
             elif sub.is_file() and sub.suffix == ".md":
-                prim.plays[sub.stem] = _read_text(sub)
+                play_id = sub.stem
+                content = _read_text(sub)
+            if play_id and content:
+                prim.plays[play_id] = content
+                fm = parse_play_frontmatter(content)
+                prim.play_meta[play_id] = PlayMeta(
+                    id=fm.get("id", play_id),
+                    name=fm.get("name", play_id),
+                    kind=fm.get("kind", "play"),
+                    description=fm.get("description", ""),
+                    category=fm.get("category", ""),
+                    tags=fm.get("tags", []) if isinstance(fm.get("tags"), list) else [],
+                    channel=fm.get("channel", "multi"),
+                    source_repo=fm.get("source_repo", ""),
+                )
 
     # Memory (file-based supplementary memory)
     memory_dir = base / "memory"

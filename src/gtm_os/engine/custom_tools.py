@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from croniter import croniter
 
-from ..types import Tool
+from ..types import Primitives, Tool
 
 if TYPE_CHECKING:  # pragma: no cover
     from .experiment import ExperimentRunner
@@ -47,6 +47,7 @@ def build_custom_tools(
     memory: VectorMemory,
     runner: ExperimentRunner | None = None,
     play_ids: list[str] | None = None,
+    primitives: Primitives | None = None,
 ) -> list[Tool]:
     play_id_enum = play_ids or []
 
@@ -232,8 +233,39 @@ def build_custom_tools(
         )
         return {"ok": True, "experiment_id": experiment_id, "phase": "paused"}
 
-    async def _list_plays() -> dict[str, Any]:
-        return {"ok": True, "plays": play_id_enum}
+    async def _list_plays(kind: str | None = None) -> dict[str, Any]:
+        items: list[dict[str, str]] = []
+        for pid in play_id_enum:
+            meta = primitives.play_meta.get(pid) if primitives else None
+            entry = {"id": pid}
+            if meta:
+                entry["name"] = meta.name
+                entry["kind"] = meta.kind
+                entry["description"] = meta.description
+                entry["category"] = meta.category
+            else:
+                entry["name"] = pid
+                entry["kind"] = "play"
+                entry["description"] = ""
+                entry["category"] = ""
+            if kind and entry["kind"] != kind:
+                continue
+            items.append(entry)
+        return {"ok": True, "plays": items, "count": len(items)}
+
+    async def _get_play(play_id: str) -> dict[str, Any]:
+        if not primitives or play_id not in primitives.plays:
+            return {"ok": False, "error": f"play '{play_id}' not found"}
+        content = primitives.plays[play_id]
+        meta = primitives.play_meta.get(play_id)
+        result: dict[str, Any] = {"ok": True, "id": play_id, "content": content}
+        if meta:
+            result["name"] = meta.name
+            result["kind"] = meta.kind
+            result["description"] = meta.description
+            result["category"] = meta.category
+            result["tags"] = meta.tags
+        return result
 
     # WS3B: Metrics tools.
     async def _save_metric(
@@ -525,9 +557,37 @@ def build_custom_tools(
         ),
         Tool(
             name="list_plays",
-            description="List the play IDs available for use in experiments.",
-            parameters={"type": "object", "properties": {}},
+            description=(
+                "List all available plays (playbooks, workflows, skills, tools) with their "
+                "names, kinds, descriptions, and categories. Filter by kind to narrow results."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["playbook", "workflow", "skill", "tool", "play"],
+                        "description": "Optional filter by play kind",
+                    },
+                },
+            },
             execute=_list_plays,
+        ),
+        Tool(
+            name="get_play",
+            description=(
+                "Get the full content and metadata of a specific play by its ID. "
+                "Returns the complete PLAY.md body including hypothesis, success criteria, "
+                "workflows, skills, tools, and experiments."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "play_id": {"type": "string", "description": "The play ID to retrieve"},
+                },
+                "required": ["play_id"],
+            },
+            execute=_get_play,
         ),
         # WS3B: Structured metrics tools.
         Tool(
