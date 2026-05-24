@@ -4,6 +4,16 @@
 
 :root {
   color-scheme: dark;
+  --glass-bg: rgba(15, 23, 42, 0.55);
+  --glass-bg-hover: rgba(15, 23, 42, 0.7);
+  --glass-border: rgba(148, 163, 184, 0.12);
+  --glass-border-hover: rgba(148, 163, 184, 0.22);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --glass-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --glass-blur: 20px;
+  --accent: 160, 96%, 56%;
+  --accent-rgb: 34, 211, 153;
 }
 
 html,
@@ -11,6 +21,170 @@ body,
 #root {
   height: 100%;
 }
+
+body {
+  background: #020617;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(34, 211, 153, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(99, 102, 241, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(168, 85, 247, 0.03) 0%, transparent 60%);
+}
+
+/* ── Liquid Glass utilities ─────────────────────────── */
+
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+
+  .glass-hover:hover {
+    background: var(--glass-bg-hover);
+    border-color: var(--glass-border-hover);
+  }
+
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 16px;
+    transition: all 0.2s ease;
+  }
+
+  .glass-card:hover {
+    background: var(--glass-bg-hover);
+    border-color: var(--glass-border-hover);
+    box-shadow: var(--glass-shadow-lg);
+    transform: translateY(-1px);
+  }
+
+  .glass-sidebar {
+    background: rgba(8, 15, 30, 0.7);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid var(--glass-border);
+  }
+
+  .glass-header {
+    background: rgba(8, 15, 30, 0.6);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .glass-input {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+  }
+
+  .glass-input:focus {
+    border-color: rgba(34, 211, 153, 0.4);
+    box-shadow: 0 0 0 3px rgba(34, 211, 153, 0.1);
+    outline: none;
+  }
+
+  .glass-pill {
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .glass-btn {
+    background: rgba(34, 211, 153, 0.15);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(34, 211, 153, 0.25);
+    border-radius: 10px;
+    color: #22d3a0;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .glass-btn:hover {
+    background: rgba(34, 211, 153, 0.25);
+    border-color: rgba(34, 211, 153, 0.4);
+    box-shadow: 0 0 20px rgba(34, 211, 153, 0.15);
+  }
+
+  .glass-btn-danger {
+    background: rgba(244, 63, 94, 0.15);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    color: #fb7185;
+  }
+
+  .glass-btn-danger:hover {
+    background: rgba(244, 63, 94, 0.25);
+    border-color: rgba(244, 63, 94, 0.4);
+  }
+
+  .glass-chat-panel {
+    background: rgba(8, 15, 30, 0.75);
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(32px);
+    border-top: 1px solid var(--glass-border);
+  }
+}
+
+/* ── Glow effects ─────────────────────────────────── */
+
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(34, 211, 153, 0.15), 0 0 60px rgba(34, 211, 153, 0.05);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15), 0 0 60px rgba(99, 102, 241, 0.05);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.15), 0 0 60px rgba(168, 85, 247, 0.05);
+}
+
+.glow-amber {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 0 60px rgba(245, 158, 11, 0.05);
+}
+
+/* ── Phase pill colors ─────────────────────────────── */
+
+.phase-design   { background: rgba(56, 189, 248, 0.15); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
+.phase-build    { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.3); }
+.phase-execute  { background: rgba(34, 211, 153, 0.15); color: #6ee7b7; border-color: rgba(34, 211, 153, 0.3); }
+.phase-measure  { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border-color: rgba(245, 158, 11, 0.3); }
+.phase-learn    { background: rgba(168, 85, 247, 0.15); color: #c4b5fd; border-color: rgba(168, 85, 247, 0.3); }
+.phase-complete { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.3); }
+.phase-paused   { background: rgba(244, 63, 94, 0.15); color: #fda4af; border-color: rgba(244, 63, 94, 0.3); }
+
+/* ── Scrollbar styling ─────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+/* ── Prose chat ────────────────────────────────────── */
 
 .prose-chat {
   @apply text-sm leading-6;
@@ -34,9 +208,38 @@ body,
 }
 
 .prose-chat pre {
-  @apply rounded bg-slate-900/80 p-3 text-xs overflow-x-auto;
+  @apply rounded-lg bg-slate-900/80 p-3 text-xs overflow-x-auto;
 }
 
 .prose-chat a {
   @apply text-emerald-300 underline underline-offset-2;
+}
+
+/* ── Animations ────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.2s ease both;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
