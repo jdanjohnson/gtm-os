@@ -332,11 +332,15 @@ async def oauth_completion(
     temperature: float | None,
     max_tokens: int,
     timeout: int = 120,
+    max_retries: int = 5,
 ) -> dict[str, Any]:
     """Non-streaming completion. Returns an OpenAI-shaped message dict.
 
     Shape: {"role": "assistant", "content": "...", "tool_calls": [...], "usage": {...}}
+    Retries on 429 (rate limit) and 529 (overloaded) with exponential backoff.
     """
+    import asyncio
+
     creds = await get_valid_token()
     if creds is None:
         raise RuntimeError(
@@ -354,14 +358,29 @@ async def oauth_completion(
         stream=False,
     )
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            ANTHROPIC_API_MESSAGES_URL,
-            headers=_headers(creds.access_token),
-            json=payload,
-        )
-    if resp.status_code != 200:
+    last_resp = None
+    for attempt in range(max_retries + 1):
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                ANTHROPIC_API_MESSAGES_URL,
+                headers=_headers(creds.access_token),
+                json=payload,
+            )
+        if resp.status_code == 200:
+            break
+        if resp.status_code in (429, 529) and attempt < max_retries:
+            retry_after = resp.headers.get("retry-after")
+            wait = float(retry_after) if retry_after else min(2 ** attempt * 2, 60)
+            await asyncio.sleep(wait)
+            last_resp = resp
+            continue
         raise RuntimeError(f"Anthropic OAuth call failed ({resp.status_code}): {resp.text[:500]}")
+    else:
+        raise RuntimeError(
+            f"Anthropic OAuth rate limited after {max_retries} retries "
+            f"({last_resp.status_code if last_resp else 'unknown'}): "
+            f"{last_resp.text[:500] if last_resp else ''}"
+        )
     data = resp.json()
 
     text_parts: list[str] = []
