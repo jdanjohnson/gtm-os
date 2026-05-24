@@ -60,16 +60,12 @@ def load_primitives(base_path: str | Path = "primitives") -> Primitives:
     phase_rules_dir = rules_dir / "phase-rules"
     if phase_rules_dir.exists():
         rules.phase_rules = {
-            f.stem: _read_text(f)
-            for f in sorted(phase_rules_dir.glob("*.md"))
-            if f.is_file()
+            f.stem: _read_text(f) for f in sorted(phase_rules_dir.glob("*.md")) if f.is_file()
         }
     channel_rules_dir = rules_dir / "channel-rules"
     if channel_rules_dir.exists():
         rules.channel_rules = {
-            f.stem: _read_text(f)
-            for f in sorted(channel_rules_dir.glob("*.md"))
-            if f.is_file()
+            f.stem: _read_text(f) for f in sorted(channel_rules_dir.glob("*.md")) if f.is_file()
         }
     prim.rules = rules
 

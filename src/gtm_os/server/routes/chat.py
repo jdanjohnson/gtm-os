@@ -12,9 +12,8 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from ...engine.context import assemble_context
-from ...engine.harness import HarnessOptions, stream_agent_events
 from ...engine.experiment import PHASE_AGENT
-
+from ...engine.harness import HarnessOptions, stream_agent_events
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -45,9 +44,7 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
     )
 
     primitives = gtm.runner.load_primitives_cached()
-    experiment = (
-        gtm.store.get_experiment(experiment_id) if experiment_id else None
-    )
+    experiment = gtm.store.get_experiment(experiment_id) if experiment_id else None
     agent_name = body.agent or (
         PHASE_AGENT.get(experiment.phase, "orchestrator") if experiment else "orchestrator"
     )
@@ -128,9 +125,7 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
                         experiment_id=experiment_id,
                     )
                     if experiment_id:
-                        gtm.store.add_experiment_tokens(
-                            experiment_id, int(evt.get("tokens") or 0)
-                        )
+                        gtm.store.add_experiment_tokens(experiment_id, int(evt.get("tokens") or 0))
                     yield {
                         "event": "final",
                         "data": json.dumps(
@@ -141,7 +136,7 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
                             }
                         ),
                     }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("chat stream failed")
             yield {"event": "error", "data": json.dumps({"message": str(exc)})}
 

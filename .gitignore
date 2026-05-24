@@ -16,8 +16,10 @@ build/
 # Node / frontend
 frontend/node_modules/
 frontend/dist/
-src/gtm_os/server/frontend_dist/*
-!src/gtm_os/server/frontend_dist/.gitkeep
+# `src/gtm_os/server/frontend_dist/` IS committed — it's the built UI that ships
+# with the wheel so `pip install gtm-os && gtm-os start` works end-to-end.
+# Rebuild via `cd frontend && npm install && npm run build` (the build script
+# copies output into this directory).
 
 # Local data
 data/*.db

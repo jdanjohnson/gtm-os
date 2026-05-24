@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import clsx from "clsx";
 
 import {
   Experiment,
@@ -15,12 +16,81 @@ interface Props {
   onClear: () => void;
 }
 
+const PHASES = ["design", "build", "execute", "measure", "learn", "complete"];
+
+function PhasePipeline({ currentPhase }: { currentPhase: string }) {
+  const activeIdx = PHASES.indexOf(currentPhase);
+  return (
+    <div className="mb-4 flex items-center gap-1">
+      {PHASES.map((phase, i) => {
+        const isActive = phase === currentPhase;
+        const isComplete = activeIdx > i;
+        const isPaused = currentPhase === "paused";
+        return (
+          <div key={phase} className="flex items-center gap-1">
+            <div
+              className={clsx(
+                "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all",
+                isActive && !isPaused && "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20",
+                isComplete && "bg-emerald-900/50 text-emerald-300",
+                !isActive && !isComplete && "bg-slate-800 text-slate-500",
+                isPaused && isActive && "bg-amber-600 text-white",
+              )}
+            >
+              {isComplete && <span>✓</span>}
+              {phase}
+            </div>
+            {i < PHASES.length - 1 && (
+              <div
+                className={clsx(
+                  "h-px w-4",
+                  isComplete ? "bg-emerald-600" : "bg-slate-700",
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+      {currentPhase === "paused" && (
+        <div className="ml-2 rounded-full bg-amber-600/20 px-2 py-0.5 text-xs text-amber-300">
+          PAUSED
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TokenUsageBar({ used, budget }: { used: number; budget: number }) {
+  const pct = Math.min(100, (used / budget) * 100);
+  const isHigh = pct > 80;
+  return (
+    <div className="mb-4">
+      <div className="mb-1 flex justify-between text-xs text-slate-400">
+        <span>Token Usage</span>
+        <span>
+          {used.toLocaleString()} / {budget.toLocaleString()} ({pct.toFixed(1)}%)
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+        <div
+          className={clsx(
+            "h-full rounded-full transition-all",
+            isHigh ? "bg-rose-500" : "bg-emerald-500",
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function ExperimentDetail({ experimentId, onClear }: Props) {
   const [experiment, setExperiment] = useState<Experiment | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [busy, setBusy] = useState(false);
   const [ticking, setTicking] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [expandedRun, setExpandedRun] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!experimentId) {
@@ -77,6 +147,12 @@ export default function ExperimentDetail({ experimentId, onClear }: Props) {
           close
         </button>
       </div>
+
+      {/* WS3A: Phase pipeline visualization */}
+      <PhasePipeline currentPhase={experiment.phase} />
+
+      {/* WS3A: Token usage bar */}
+      <TokenUsageBar used={experiment.tokens_used} budget={experiment.token_budget} />
 
       <section className="mb-4 grid grid-cols-2 gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm">
         <Field label="phase" value={experiment.phase} />
@@ -156,19 +232,28 @@ export default function ExperimentDetail({ experimentId, onClear }: Props) {
 
       <section className="mt-2">
         <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Runs
+          Runs ({runs.length})
         </h3>
         {runs.length === 0 ? (
-          <div className="text-xs text-slate-500">No runs yet — kick one off with “run tick”.</div>
+          <div className="text-xs text-slate-500">No runs yet — kick one off with "run tick".</div>
         ) : (
           <div className="space-y-2">
             {runs.map((r) => (
               <div
                 key={r.id}
-                className="rounded border border-slate-800 bg-slate-900/40 p-3 text-xs"
+                className="cursor-pointer rounded border border-slate-800 bg-slate-900/40 p-3 text-xs transition-colors hover:border-slate-700"
+                onClick={() => setExpandedRun(expandedRun === r.id ? null : r.id)}
               >
                 <div className="flex items-center justify-between text-slate-300">
-                  <span>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={clsx(
+                        "h-2 w-2 rounded-full",
+                        r.status === "completed" && "bg-emerald-400",
+                        r.status === "failed" && "bg-rose-400",
+                        r.status === "running" && "bg-amber-400 animate-pulse",
+                      )}
+                    />
                     [{r.phase}] {r.status}
                     {r.error ? <span className="ml-2 text-rose-400">{r.error}</span> : null}
                   </span>
@@ -176,8 +261,8 @@ export default function ExperimentDetail({ experimentId, onClear }: Props) {
                     {r.tokens_used} tokens · {r.started_at}
                   </span>
                 </div>
-                {r.tools_used && r.tools_used.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-slate-400">
+                {expandedRun === r.id && r.tools_used && r.tools_used.length > 0 && (
+                  <ul className="mt-2 space-y-1 border-t border-slate-800 pt-2 text-slate-400">
                     {r.tools_used.map((t, i) => (
                       <li key={i} className="font-mono text-[11px]">
                         → {t.name}({JSON.stringify(t.arguments).slice(0, 120)}…)

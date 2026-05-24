@@ -1,23 +1,31 @@
-"""Experiment lifecycle — create, run_tick, transition_phase, pause, resume."""
+"""Experiment lifecycle — create, run_tick, transition_phase, pause, resume.
+
+Implements:
+- WS1A: Context management wired into experiment ticks
+- WS1B: Correction-to-rule automatically after learn phase
+- WS1C: Durable execution via DurableContext checkpoint/replay
+- WS1D: Conversation history persistence across ticks
+- WS2C: Output chaining between phases, sub-step tracking, play-aware directives
+"""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..config import Config
-from ..types import AgentResult, Experiment, Primitives
+from ..types import Experiment, Primitives
 from .composio_tools import ComposioIntegration, build_composio_tools
 from .context import assemble_context
 from .context_manager import ContextManager
 from .custom_tools import build_custom_tools
+from .durability import DurableContext
 from .harness import HarnessOptions, run_agent
 from .loader import load_primitives
 from .memory import VectorMemory
 from .store import Store
-
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +41,14 @@ PHASE_AGENT = {
     "paused": "orchestrator",
 }
 
+# Maximum messages to load from history for context continuity.
+MAX_HISTORY_MESSAGES = 30
+# Threshold (messages count) after which we flush to memory.
+FLUSH_THRESHOLD = 8
+
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 @dataclass
@@ -123,7 +136,7 @@ class ExperimentRunner:
     def transition_phase(
         self, experiment_id: str, new_phase: str, reason: str | None = None
     ) -> Experiment | None:
-        if new_phase not in PHASE_ORDER + ["paused"]:
+        if new_phase not in [*PHASE_ORDER, "paused"]:
             raise ValueError(f"unknown phase: {new_phase}")
         return self.store.update_experiment(experiment_id, phase=new_phase)
 
@@ -137,10 +150,29 @@ class ExperimentRunner:
     def resume(self, experiment_id: str, *, target_phase: str = "design") -> Experiment | None:
         return self.store.update_experiment(experiment_id, phase=target_phase)
 
+    # ---------- output chaining (WS2C) ----------
+
+    def _get_previous_phase_output(self, experiment_id: str, current_phase: str) -> str | None:
+        """Retrieve output from the previous phase to chain into the current context."""
+        prev_phase = _prev_phase(current_phase)
+        if not prev_phase:
+            return None
+        runs = self.store.list_runs(experiment_id, limit=50)
+        for run in runs:
+            if run.phase == prev_phase and run.status == "completed" and run.output:
+                msg = run.output.get("message", "")
+                if msg:
+                    return f"[Previous phase '{prev_phase}' output]\n{msg[:2000]}"
+        return None
+
     # ---------- run ----------
 
     async def run_tick(self, experiment_id: str) -> RunOutcome:
-        """One tick of the experiment loop."""
+        """One tick of the experiment loop.
+
+        Implements durable execution (1C): each major step is checkpointed.
+        On crash/restart, completed steps are skipped.
+        """
         exp = self.store.get_experiment(experiment_id)
         if not exp:
             return RunOutcome(
@@ -173,6 +205,9 @@ class ExperimentRunner:
             input_context={"agent": PHASE_AGENT.get(exp.phase, "orchestrator")},
         )
 
+        # WS1C: Create durable context for checkpoint/replay.
+        _ctx = DurableContext(self.store, experiment_id, run.id)
+
         # Build context.
         agent_name = PHASE_AGENT.get(exp.phase, "orchestrator")
         memories = await self.memory.search(
@@ -190,9 +225,33 @@ class ExperimentRunner:
         # Build tools.
         tools = self.build_tools(primitives)
 
-        # Construct first user message for this tick.
-        next_step = _phase_directive(exp.phase, exp)
-        messages = [{"role": "user", "content": next_step}]
+        # WS1D: Load conversation history from previous ticks.
+        history = self.store.list_messages(experiment_id=experiment_id, limit=MAX_HISTORY_MESSAGES)
+        history_messages: list[dict[str, Any]] = []
+        for msg in history:
+            m: dict[str, Any] = {"role": msg["role"], "content": msg["content"] or ""}
+            if msg.get("tool_calls"):
+                m["tool_calls"] = msg["tool_calls"]
+            if msg.get("tool_call_id"):
+                m["tool_call_id"] = msg["tool_call_id"]
+                m["role"] = "tool"
+            if msg.get("name"):
+                m["name"] = msg["name"]
+            history_messages.append(m)
+
+        # WS1A: Prune context before sending to LLM.
+        if history_messages:
+            history_messages = self.context_manager.prune(history_messages)
+
+        # WS2C: Chain previous phase output into context.
+        prev_output = self._get_previous_phase_output(experiment_id, exp.phase)
+
+        # Construct the directive for this tick.
+        next_step = _phase_directive(exp.phase, exp, primitives)
+        if prev_output:
+            next_step = f"{prev_output}\n\n---\n\n{next_step}"
+
+        messages = [*history_messages, {"role": "user", "content": next_step}]
 
         try:
             result = await run_agent(
@@ -202,7 +261,7 @@ class ExperimentRunner:
                 config=self.config.llm,
                 options=HarnessOptions(max_iterations=15),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("agent run failed")
             self.store.finish_run(run.id, status="failed", error=str(exc))
             return RunOutcome(
@@ -213,10 +272,7 @@ class ExperimentRunner:
                 error=str(exc),
             )
 
-        tools_used = [
-            {"name": tc.name, "arguments": tc.arguments}
-            for tc in result.tool_calls
-        ]
+        tools_used = [{"name": tc.name, "arguments": tc.arguments} for tc in result.tool_calls]
         self.store.finish_run(
             run.id,
             status="completed" if result.finished else "failed",
@@ -227,13 +283,46 @@ class ExperimentRunner:
         )
         self.store.add_experiment_tokens(experiment_id, result.tokens_used)
 
-        # If the agent didn't transition the phase itself, advance automatically when finished.
+        # WS1D: Persist the directive and agent response as messages.
+        self.store.add_message(role="user", content=next_step, experiment_id=experiment_id)
+        self.store.add_message(
+            role="assistant", content=result.message.content, experiment_id=experiment_id
+        )
+
+        # WS1A: Flush to memory if conversation is getting long.
+        total_messages = len(history_messages) + 2
+        if total_messages > FLUSH_THRESHOLD:
+            await self.context_manager.flush_to_memory(
+                messages, self.memory, experiment_id=experiment_id
+            )
+
+        # WS1A: Compact if context exceeds soft limit.
+        from .context_manager import estimate_tokens
+
+        token_count = estimate_tokens(messages, self.config.llm.model)
+        if token_count > self.context_manager.max_context_tokens * 0.8:
+            await self.context_manager.compact(messages)
+
+        # WS1B: Run correction-to-rule after learn phase.
+        if exp.phase == "learn" and result.finished and result.error is None:
+            try:
+                rules_dir = self.config.primitives_dir / "rules"
+                written = self.memory.write_corrections_to_rules(rules_dir)
+                if written:
+                    logger.info(
+                        "promoted %d learnings to rules in %s",
+                        len(written),
+                        rules_dir / "derived",
+                    )
+            except Exception:
+                logger.exception("correction-to-rule failed (non-fatal)")
+
+        # Phase transition logic.
         if result.finished and result.error is None:
             current = self.store.get_experiment(experiment_id)
             if current and current.phase == exp.phase and exp.phase != "complete":
                 next_phase = _next_phase(exp.phase)
                 if exp.phase == "build":
-                    # Build → execute requires approval; pause instead.
                     self.store.update_experiment(experiment_id, phase="paused")
                     self.store.add_message(
                         role="system",
@@ -262,34 +351,60 @@ def _next_phase(phase: str) -> str | None:
     return PHASE_ORDER[idx + 1] if idx + 1 < len(PHASE_ORDER) else None
 
 
-def _phase_directive(phase: str, exp: Experiment) -> str:
-    """Per-tick instructions for the agent. Borrowed pattern from PraisonAI workflow steps."""
+def _prev_phase(phase: str) -> str | None:
+    if phase not in PHASE_ORDER:
+        return None
+    idx = PHASE_ORDER.index(phase)
+    return PHASE_ORDER[idx - 1] if idx > 0 else None
+
+
+def _phase_directive(phase: str, exp: Experiment, primitives: Primitives | None = None) -> str:
+    """Per-tick instructions. WS2C: play-aware directives with step-specific context."""
     base = f"Continue experiment '{exp.name}'. Phase: {phase}."
+
+    # Load play content for richer directives.
+    play_context = ""
+    if primitives and exp.play_ids:
+        for pid in exp.play_ids[:2]:
+            play_body = primitives.plays.get(pid, "")
+            if play_body:
+                play_context += f"\n\n[Play: {pid}]\n{play_body[:1500]}"
+
     if phase == "design":
         return (
             f"{base} Define ICP, frame the hypothesis, and pick the right plays. "
             "Search memory for relevant past learnings before deciding. When the design is solid, "
             "use transition_phase to move to 'build'."
+            f"{play_context}"
         )
     if phase == "build":
         return (
             f"{base} Build the assets: prospect list, copy, scripts, or content. "
             "Use composio_discover_tools / composio_execute_action for real integrations. "
-            "When complete, use request_approval(experiment_id, message) and wait — DO NOT transition to 'execute' yourself."
+            "When complete, use request_approval(experiment_id, message) and wait — "
+            "DO NOT transition to 'execute' yourself."
+            f"{play_context}"
         )
     if phase == "execute":
         return (
             f"{base} Execute the play. Respect channel rules and rate limits. "
-            "Save outcomes to memory as you go. When all sends are complete (or the time window is done), transition to 'measure'."
+            "Track what was sent and to whom. Use tools to actually deliver. "
+            "When execution is complete, transition to 'measure'."
+            f"{play_context}"
         )
     if phase == "measure":
         return (
-            f"{base} Pull metrics, compare to the hypothesis. Save concrete learnings to memory. "
-            "Then transition to 'learn'."
+            f"{base} Gather results. Check open rates, reply rates, leads generated, "
+            "or whatever KPIs the hypothesis defined. Save facts to memory. "
+            "When measurement is complete, transition to 'learn'."
+            f"{play_context}"
         )
     if phase == "learn":
         return (
-            f"{base} Codify the learnings (use memory_save with type='learning'). Propose follow-up "
-            "experiments. Then transition to 'complete'."
+            f"{base} Analyze the results. What worked? What didn't? "
+            "Save learnings to memory (type='learning'). Identify corrections — "
+            "things we should always/never do going forward. "
+            "When learning is complete, transition to 'complete'."
+            f"{play_context}"
         )
-    return f"{base} Continue the work."
+    return f"{base} Wrap up and report final results."

@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  gtm-os:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./primitives:/app/primitives
+      - gtm-os-data:/app/data
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - COMPOSIO_API_KEY=${COMPOSIO_API_KEY:-}
+    restart: unless-stopped
+
+volumes:
+  gtm-os-data:

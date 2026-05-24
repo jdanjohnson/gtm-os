@@ -9,7 +9,6 @@ from typing import Any
 
 import yaml
 
-
 DEFAULT_CONFIG: dict[str, Any] = {
     "primitives_dir": "./primitives",
     "data_dir": "./data",
@@ -148,9 +147,11 @@ def load_config(config_path: Path | None = None) -> Config:
         context_hard_clear_ratio=float(budgets_raw.get("context_hard_clear_ratio", 0.50)),
     )
 
-    composio_key = merged.get("api_keys", {}).get("composio") if isinstance(
-        merged.get("api_keys"), dict
-    ) else None
+    composio_key = (
+        merged.get("api_keys", {}).get("composio")
+        if isinstance(merged.get("api_keys"), dict)
+        else None
+    )
     composio_key = composio_key or os.environ.get("COMPOSIO_API_KEY")
 
     return Config(
@@ -175,6 +176,7 @@ def _resolve_llm_api_key(model: str) -> str | None:
     env_map = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
+        "anthropic_oauth": None,  # uses Claude Code's OAuth token; no env var needed.
         "groq": "GROQ_API_KEY",
         "mistral": "MISTRAL_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",
