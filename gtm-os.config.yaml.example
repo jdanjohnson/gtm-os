@@ -19,9 +19,9 @@ scheduler:
   max_consecutive_failures: 3
 
 # Default LLM provider/model.
-# Any litellm-compatible model name works (e.g. openai/gpt-4o, anthropic/claude-3-5-sonnet-20241022, ollama/llama3.1).
+# Any litellm-compatible model name works (e.g. openai/gpt-4o, anthropic/claude-sonnet-4, ollama/llama3.1).
 llm:
-  model: openai/gpt-4o-mini
+  model: anthropic/claude-sonnet-4
   embedding_model: openai/text-embedding-3-small
   temperature: 0.4
   max_tokens: 4096
@@ -34,7 +34,13 @@ budgets:
   context_hard_clear_ratio: 0.50
 
 # API keys are read from environment variables by default.
-# You can also set them here (NOT recommended — commit gtm-os.config.yaml is gitignored).
+# The easiest way is to create a .env file in the project root:
+#   ANTHROPIC_API_KEY=sk-ant-...
+#   OPENAI_API_KEY=sk-...          # only needed if using OpenAI embeddings
+#   COMPOSIO_API_KEY=...           # optional, for tool integrations
+#
+# The server auto-loads .env on startup — no need to export manually.
+# You can also set keys here (NOT recommended — gtm-os.config.yaml is gitignored).
 # api_keys:
 #   openai: sk-...
 #   anthropic: sk-ant-...

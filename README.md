@@ -82,11 +82,20 @@ Everything lives in `gtm-os.config.yaml` (see `gtm-os.config.yaml.example`). You
 
 ```yaml
 llm:
-  model: anthropic/claude-3-5-sonnet-20241022   # or openai/gpt-4o, ollama/llama3.1, …
+  model: anthropic/claude-sonnet-4   # or openai/gpt-4o, ollama/llama3.1, …
   embedding_model: openai/text-embedding-3-small
 ```
 
-API keys come from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `COMPOSIO_API_KEY`, …).
+API keys are loaded automatically from a `.env` file in the project root:
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...          # only needed if using OpenAI embeddings
+COMPOSIO_API_KEY=...           # optional
+```
+
+No need to export keys manually — the server reads `.env` on startup.
 
 ---
 

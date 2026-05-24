@@ -31,6 +31,10 @@ data/*.sqlite*
 # Local config (template lives in gtm-os.config.yaml.example)
 gtm-os.config.yaml
 
+# Environment variables
+.env
+.env.*
+
 # OS
 .DS_Store
 Thumbs.db
