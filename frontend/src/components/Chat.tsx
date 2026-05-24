@@ -8,6 +8,10 @@ import { PrimitivesSummary, streamChat } from "../lib/api";
 interface Props {
   experimentId: string | null;
   primitives: PrimitivesSummary | null;
+  /** Map of experiment IDs to names for display in session tabs. */
+  experimentNames?: Record<string, string>;
+  /** Called when user clicks a session tab for a different experiment. */
+  onSwitchExperiment?: (id: string | null) => void;
 }
 
 interface UIMessage {
@@ -19,7 +23,31 @@ interface UIMessage {
   pending?: boolean;
 }
 
-export default function Chat({ experimentId, primitives }: Props) {
+interface ChatSession {
+  messages: UIMessage[];
+  threadId: string | null;
+  agent: string;
+  unread: number;
+}
+
+const GENERAL_KEY = "__general__";
+
+function sessionKey(experimentId: string | null): string {
+  return experimentId ?? GENERAL_KEY;
+}
+
+function emptySession(): ChatSession {
+  return { messages: [], threadId: null, agent: "orchestrator", unread: 0 };
+}
+
+export default function Chat({
+  experimentId,
+  primitives,
+  experimentNames,
+  onSwitchExperiment,
+}: Props) {
+  const sessionsRef = useRef<Map<string, ChatSession>>(new Map());
+  const prevExpRef = useRef<string | null>(experimentId);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -27,12 +55,58 @@ export default function Chat({ experimentId, primitives }: Props) {
   const [agent, setAgent] = useState<string>("orchestrator");
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [, forceRender] = useState(0);
 
+  // Save current session to the cache.
+  const saveCurrentSession = useCallback(() => {
+    const key = sessionKey(prevExpRef.current);
+    const current = sessionsRef.current.get(key) ?? emptySession();
+    sessionsRef.current.set(key, {
+      ...current,
+      messages,
+      threadId,
+      agent,
+    });
+  }, [messages, threadId, agent]);
+
+  // When experiment changes, save current session and restore (or create) the target.
   useEffect(() => {
-    // When experiment changes, reset thread so each experiment has its own conversation.
-    setThreadId(null);
-    setMessages([]);
-  }, [experimentId]);
+    if (prevExpRef.current === experimentId) return;
+
+    // Save outgoing session.
+    saveCurrentSession();
+
+    // Restore or init incoming session.
+    const key = sessionKey(experimentId);
+    const cached = sessionsRef.current.get(key);
+    if (cached) {
+      setMessages(cached.messages);
+      setThreadId(cached.threadId);
+      setAgent(cached.agent);
+      // Clear unread when switching to this session.
+      sessionsRef.current.set(key, { ...cached, unread: 0 });
+    } else {
+      setMessages([]);
+      setThreadId(null);
+      setAgent("orchestrator");
+    }
+
+    prevExpRef.current = experimentId;
+    forceRender((n) => n + 1);
+  }, [experimentId, saveCurrentSession]);
+
+  // Auto-save session periodically so the ref stays up-to-date.
+  useEffect(() => {
+    const key = sessionKey(experimentId);
+    const current = sessionsRef.current.get(key) ?? emptySession();
+    sessionsRef.current.set(key, {
+      ...current,
+      messages,
+      threadId,
+      agent,
+      unread: current.unread,
+    });
+  }, [messages, threadId, agent, experimentId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -156,7 +230,7 @@ export default function Chat({ experimentId, primitives }: Props) {
         },
         controller.signal,
       );
-    } catch (err) {
+    } catch {
       // already handled in onError
     } finally {
       setStreaming(false);
@@ -168,8 +242,80 @@ export default function Chat({ experimentId, primitives }: Props) {
     setStreaming(false);
   };
 
+  // Close a session tab.
+  const closeSession = (key: string) => {
+    sessionsRef.current.delete(key);
+    // If closing the currently active session, switch to general.
+    if (key === sessionKey(experimentId)) {
+      onSwitchExperiment?.(null);
+    }
+    forceRender((n) => n + 1);
+  };
+
+  // Build the list of active session keys for the tab strip.
+  const activeSessionKeys = Array.from(sessionsRef.current.keys());
+  // Always ensure current session is in the list.
+  const currentKey = sessionKey(experimentId);
+  if (!activeSessionKeys.includes(currentKey)) {
+    activeSessionKeys.unshift(currentKey);
+  }
+
   return (
     <div className="flex h-full w-full flex-col">
+      {/* Session tab strip */}
+      {activeSessionKeys.length > 0 && (
+        <div className="flex items-center gap-0.5 overflow-x-auto border-b border-slate-800 bg-slate-900/60 px-2 py-1">
+          {activeSessionKeys.map((key) => {
+            const isActive = key === currentKey;
+            const session = sessionsRef.current.get(key);
+            const unread = session?.unread ?? 0;
+            const isGeneral = key === GENERAL_KEY;
+            const expName = isGeneral
+              ? "General"
+              : experimentNames?.[key] ?? `${key.slice(0, 8)}…`;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (!isActive) {
+                    onSwitchExperiment?.(isGeneral ? null : key);
+                  }
+                }}
+                className={clsx(
+                  "group relative flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-all",
+                  isActive
+                    ? "bg-slate-700/80 text-slate-100"
+                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
+                )}
+              >
+                <span className={clsx(
+                  "inline-block h-1.5 w-1.5 rounded-full",
+                  isGeneral ? "bg-blue-400" : "bg-emerald-400",
+                )} />
+                <span className="max-w-[120px] truncate">{expName}</span>
+                {unread > 0 && !isActive && (
+                  <span className="ml-0.5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+                    {unread}
+                  </span>
+                )}
+                {session && session.messages.length > 0 && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeSession(key);
+                    }}
+                    className="ml-0.5 hidden rounded p-0.5 text-slate-500 hover:bg-slate-600 hover:text-slate-200 group-hover:inline-block"
+                  >
+                    ✕
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Agent selector + context info */}
       <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs text-slate-400">
         <span>agent:</span>
         <select
@@ -193,6 +339,7 @@ export default function Chat({ experimentId, primitives }: Props) {
         </span>
       </div>
 
+      {/* Messages area */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-6 py-6"
@@ -218,6 +365,7 @@ export default function Chat({ experimentId, primitives }: Props) {
         ))}
       </div>
 
+      {/* Input area */}
       <div className="border-t border-slate-800 bg-slate-900/30 px-6 py-4">
         <div className="flex gap-2">
           <textarea

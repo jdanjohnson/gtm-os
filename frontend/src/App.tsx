@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
 import Chat from "./components/Chat";
 import ExperimentList from "./components/ExperimentList";
 import ExperimentDetail from "./components/ExperimentDetail";
 import MemoryBrowser from "./components/MemoryBrowser";
-import { getHealth, getPrimitives, PrimitivesSummary } from "./lib/api";
+import {
+  Experiment,
+  getHealth,
+  getPrimitives,
+  listExperiments,
+  PrimitivesSummary,
+} from "./lib/api";
 
 type Tab = "chat" | "experiments" | "memory";
 
@@ -14,15 +20,40 @@ export default function App() {
   const [selectedExperiment, setSelectedExperiment] = useState<string | null>(null);
   const [primitives, setPrimitives] = useState<PrimitivesSummary | null>(null);
   const [health, setHealth] = useState<Awaited<ReturnType<typeof getHealth>> | null>(null);
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
 
   useEffect(() => {
     getHealth().then(setHealth).catch(() => null);
     getPrimitives().then(setPrimitives).catch(() => null);
   }, []);
 
+  // Periodically fetch experiments so the name map stays current.
+  useEffect(() => {
+    function refresh() {
+      listExperiments()
+        .then(({ experiments }) => setExperiments(experiments))
+        .catch(() => null);
+    }
+    refresh();
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const experimentNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const e of experiments) {
+      map[e.id] = e.name;
+    }
+    return map;
+  }, [experiments]);
+
   function handleExperimentSelect(id: string | null) {
     setSelectedExperiment(id);
     setTab("experiments");
+  }
+
+  function handleChatSwitchExperiment(id: string | null) {
+    setSelectedExperiment(id);
   }
 
   return (
@@ -77,7 +108,12 @@ export default function App() {
 
         <section className="flex flex-1 overflow-hidden">
           {tab === "chat" && (
-            <Chat experimentId={selectedExperiment} primitives={primitives} />
+            <Chat
+              experimentId={selectedExperiment}
+              primitives={primitives}
+              experimentNames={experimentNames}
+              onSwitchExperiment={handleChatSwitchExperiment}
+            />
           )}
           {tab === "experiments" && (
             <ExperimentDetail
