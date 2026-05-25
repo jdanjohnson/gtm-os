@@ -27,7 +27,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "request_timeout_seconds": 120,
     },
     "budgets": {
-        "default_experiment_token_budget": 200_000,
+        "default_experiment_token_budget": 1_000_000,
         "context_soft_trim_ratio": 0.30,
         "context_hard_clear_ratio": 0.50,
     },
@@ -59,7 +59,7 @@ class LLMConfig:
 
 @dataclass
 class BudgetConfig:
-    default_experiment_token_budget: int = 200_000
+    default_experiment_token_budget: int = 1_000_000
     context_soft_trim_ratio: float = 0.30
     context_hard_clear_ratio: float = 0.50
 
