@@ -20,7 +20,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_consecutive_failures": 3,
     },
     "llm": {
-        "model": "anthropic/claude-sonnet-4",
+        "model": "anthropic/claude-sonnet-4-20250514",
         "embedding_model": "openai/text-embedding-3-small",
         "temperature": 0.4,
         "max_tokens": 4096,
@@ -49,7 +49,7 @@ class SchedulerConfig:
 
 @dataclass
 class LLMConfig:
-    model: str = "anthropic/claude-sonnet-4"
+    model: str = "anthropic/claude-sonnet-4-20250514"
     embedding_model: str = "openai/text-embedding-3-small"
     temperature: float = 0.4
     max_tokens: int = 4096
@@ -125,7 +125,7 @@ def load_config(config_path: Path | None = None) -> Config:
 
     llm_raw = merged.get("llm", {})
     llm = LLMConfig(
-        model=llm_raw.get("model", "anthropic/claude-sonnet-4"),
+        model=llm_raw.get("model", "anthropic/claude-sonnet-4-20250514"),
         embedding_model=llm_raw.get("embedding_model", "openai/text-embedding-3-small"),
         temperature=float(llm_raw.get("temperature", 0.4)),
         max_tokens=int(llm_raw.get("max_tokens", 4096)),

@@ -19,9 +19,9 @@ scheduler:
   max_consecutive_failures: 3
 
 # Default LLM provider/model.
-# Any litellm-compatible model name works (e.g. openai/gpt-4o, anthropic/claude-sonnet-4, ollama/llama3.1).
+# Any litellm-compatible model name works (e.g. openai/gpt-4o, anthropic/claude-sonnet-4-20250514, ollama/llama3.1).
 llm:
-  model: anthropic/claude-sonnet-4
+  model: anthropic/claude-sonnet-4-20250514
   embedding_model: openai/text-embedding-3-small
   temperature: 0.4
   max_tokens: 4096
