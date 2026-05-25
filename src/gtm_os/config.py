@@ -192,6 +192,7 @@ def _resolve_llm_api_key(model: str) -> str | None:
         "moonshot": "MOONSHOT_API_KEY",
         "google": "GOOGLE_API_KEY",
         "gemini": "GOOGLE_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
         "azure": "AZURE_API_KEY",
         "ollama": None,
     }

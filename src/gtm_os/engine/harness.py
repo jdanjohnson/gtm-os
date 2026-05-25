@@ -544,13 +544,17 @@ async def stream_agent_events(
             async def cb(t: str) -> None:
                 await q.put({"type": "token", "text": t})
 
-            msg, tokens = await stream_llm_tokens(
-                system_prompt=system_prompt,
-                messages=convo,
-                tools=tools,
-                config=config,
-                on_token=cb,
-            )
+            try:
+                msg, tokens = await stream_llm_tokens(
+                    system_prompt=system_prompt,
+                    messages=convo,
+                    tools=tools,
+                    config=config,
+                    on_token=cb,
+                )
+            except Exception as exc:
+                await q.put({"__error__": True, "exc": exc})
+                raise
             await q.put({"__done__": True, "msg": msg, "tokens": tokens})
             return msg
 
@@ -563,6 +567,9 @@ async def stream_agent_events(
             if evt.get("__done__"):
                 final_msg = evt["msg"]
                 tokens_this_call = evt["tokens"]
+                break
+            if evt.get("__error__"):
+                await producer  # re-raise the original exception
                 break
             yield evt
         await producer  # surface any errors
