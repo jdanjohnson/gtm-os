@@ -186,11 +186,10 @@ class ExperimentRunner:
         exp = self.store.get_experiment(experiment_id)
         if exp:
             hint = exp.config.get("_resume_to")
-            if hint and hint in PHASE_ORDER:
-                if hint not in completed:
-                    logger.info("resume %s → hint %r (not yet completed)", experiment_id[:8], hint)
-                    return hint
-                # Hint phase already done — fall through to run-based detection.
+            if hint and hint in PHASE_ORDER and hint not in completed:
+                logger.info("resume %s → hint %r (not yet completed)", experiment_id[:8], hint)
+                return hint
+            # Hint phase already done (or missing) — fall through to run-based detection.
 
         for phase in PHASE_ORDER:
             if phase not in completed:

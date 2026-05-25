@@ -10,6 +10,7 @@ agent can react gracefully.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -140,10 +141,8 @@ class ComposioIntegration:
             }
         except httpx.HTTPStatusError as exc:
             error_body = {}
-            try:
+            with contextlib.suppress(Exception):
                 error_body = exc.response.json()
-            except Exception:
-                pass
             error_msg = (
                 error_body.get("error", {}).get("message", "")
                 if isinstance(error_body.get("error"), dict)
