@@ -6,7 +6,9 @@ from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from ..validation import sanitize_text
 
 router = APIRouter()
 
@@ -20,6 +22,21 @@ class CreateExperimentBody(BaseModel):
     config: dict[str, Any] | None = None
     token_budget: int | None = None
 
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = sanitize_text(v)
+        if not v:
+            raise ValueError("name must not be empty")
+        return v
+
+    @field_validator("description", "hypothesis", mode="before")
+    @classmethod
+    def sanitize_optional_text(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return sanitize_text(v)
+
 
 class UpdateExperimentBody(BaseModel):
     name: str | None = None
@@ -30,6 +47,23 @@ class UpdateExperimentBody(BaseModel):
     config: dict[str, Any] | None = None
     current_agent: str | None = None
     token_budget: int | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def name_not_empty(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = sanitize_text(v)
+        if not v:
+            raise ValueError("name must not be empty")
+        return v
+
+    @field_validator("description", "hypothesis", mode="before")
+    @classmethod
+    def sanitize_optional_text(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return sanitize_text(v)
 
 
 class ScheduleBody(BaseModel):
