@@ -88,11 +88,11 @@ export default function ExperimentList({ selectedId, onSelect, primitives }: Pro
             className={clsx(
               "block w-full rounded-xl px-3 py-3 text-left text-sm transition-all",
               selectedId === e.id
-                ? "glass text-gray-100 glow-emerald"
+                ? "glass text-gray-900 glow-emerald"
                 : "text-gray-500 hover:bg-black/[0.03]",
             )}
           >
-            <div className="font-medium text-gray-100 truncate">{e.name}</div>
+            <div className="font-medium text-gray-900 truncate">{e.name}</div>
             <div className="mt-1.5 flex items-center gap-2 text-[11px]">
               <span className={clsx("glass-pill border", PHASE_CLASS[e.phase] ?? "")}>
                 {e.phase}
