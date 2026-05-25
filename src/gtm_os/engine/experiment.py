@@ -268,7 +268,7 @@ class ExperimentRunner:
                 messages=messages,
                 tools=tools,
                 config=self.config.llm,
-                options=HarnessOptions(max_iterations=15),
+                options=HarnessOptions(max_iterations=50),
             )
         except Exception as exc:
             logger.exception("agent run failed")

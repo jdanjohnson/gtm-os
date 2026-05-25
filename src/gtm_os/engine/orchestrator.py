@@ -121,7 +121,7 @@ class Orchestrator:
                     messages=messages,
                     tools=tools,
                     config=self.config.llm,
-                    options=HarnessOptions(max_iterations=15),
+                    options=HarnessOptions(max_iterations=50),
                 )
             except Exception as exc:
                 logger.exception("agent %s failed in phase %s", agent_name, phase)
