@@ -32,7 +32,7 @@ class CUAIntegration:
         self,
         task: str,
         *,
-        model: str = "anthropic/claude-sonnet-4",
+        model: str = "anthropic/claude-sonnet-4-20250514",
         max_steps: int = 30,
         start_url: str | None = None,
     ) -> dict[str, Any]:

@@ -110,7 +110,7 @@ def init(
             shutil.copy(example_path, cfg_path)
         else:
             cfg_path.write_text(
-                "primitives_dir: ./primitives\ndata_dir: ./data\nllm:\n  model: anthropic/claude-sonnet-4\n",
+                "primitives_dir: ./primitives\ndata_dir: ./data\nllm:\n  model: anthropic/claude-sonnet-4-20250514\n",
                 encoding="utf-8",
             )
         console.print(f"[green]Wrote {cfg_path}[/green]")
