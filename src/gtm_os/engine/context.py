@@ -126,6 +126,9 @@ def assemble_context(
                 "- Composio and Pipedream integrations are available as optional accelerators\n"
                 "  for connecting to external services (Gmail, Apollo, Slack, etc.).\n"
                 "  Use them when they help, but do not depend on them — work with what you have.\n"
+                "- CUA (Computer-Use Agent) tools are available for browser/GUI automation.\n"
+                "  Use computer_use, browse_and_extract, or fill_web_form when you need to\n"
+                "  interact with websites visually (LinkedIn, CRMs, dynamic pages, forms).\n"
                 "- Before the execute phase, always ask for human approval.\n"
                 "- Keep responses focused. Prefer concrete next steps over generic prose.\n"
             ),
