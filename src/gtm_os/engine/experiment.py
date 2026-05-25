@@ -150,14 +150,64 @@ class ExperimentRunner:
         return self.store.update_experiment(experiment_id, phase=new_phase)
 
     def pause(self, experiment_id: str, reason: str | None = None) -> Experiment | None:
+        exp = self.store.get_experiment(experiment_id)
+        if exp and exp.phase not in {"paused", "complete"}:
+            self._save_resume_target(experiment_id, exp.phase)
         if reason:
             self.store.add_message(
                 role="system", content=f"[PAUSED] {reason}", experiment_id=experiment_id
             )
         return self.store.update_experiment(experiment_id, phase="paused")
 
-    def resume(self, experiment_id: str, *, target_phase: str = "design") -> Experiment | None:
+    def resume(self, experiment_id: str, *, target_phase: str = "auto") -> Experiment | None:
+        if target_phase == "auto":
+            target_phase = self._detect_resume_phase(experiment_id)
+        # Clear the stored resume target so it doesn't stale on the next pause/resume.
+        exp = self.store.get_experiment(experiment_id)
+        if exp and exp.config.get("_resume_to"):
+            cfg = dict(exp.config)
+            cfg.pop("_resume_to", None)
+            self.store.update_experiment(experiment_id, config=cfg)
         return self.store.update_experiment(experiment_id, phase=target_phase)
+
+    def _detect_resume_phase(self, experiment_id: str) -> str:
+        """Determine the correct phase to resume to.
+
+        Uses the stored ``_resume_to`` hint (the phase that was active when
+        pausing) together with completed-run data.  If the hinted phase
+        already has a completed run we advance to the next incomplete phase.
+        """
+        runs = self.store.list_runs(experiment_id, limit=100)
+        completed = {r.phase for r in runs if r.status == "completed"}
+        logger.info(
+            "resume %s → completed phases: %s", experiment_id[:8], completed or "(none)"
+        )
+
+        exp = self.store.get_experiment(experiment_id)
+        if exp:
+            hint = exp.config.get("_resume_to")
+            if hint and hint in PHASE_ORDER:
+                if hint not in completed:
+                    logger.info("resume %s → hint %r (not yet completed)", experiment_id[:8], hint)
+                    return hint
+                # Hint phase already done — fall through to run-based detection.
+
+        for phase in PHASE_ORDER:
+            if phase not in completed:
+                return phase
+        return "design"
+
+    def _save_resume_target(self, experiment_id: str, current_phase: str) -> None:
+        """Record the phase the experiment should resume to after un-pausing.
+
+        Stores the *current* phase.  ``_detect_resume_phase`` will check
+        whether a completed run exists for it and advance if needed.
+        """
+        exp = self.store.get_experiment(experiment_id)
+        if exp:
+            cfg = dict(exp.config)
+            cfg["_resume_to"] = current_phase
+            self.store.update_experiment(experiment_id, config=cfg)
 
     # ---------- output chaining (WS2C) ----------
 
@@ -198,6 +248,7 @@ class ExperimentRunner:
             )
 
         if exp.tokens_used >= exp.token_budget:
+            self._save_resume_target(experiment_id, exp.phase)
             self.store.update_experiment(experiment_id, phase="paused")
             return RunOutcome(
                 run_id="",
@@ -388,6 +439,7 @@ class ExperimentRunner:
                             experiment_id=experiment_id,
                         )
                     else:
+                        self._save_resume_target(experiment_id, "build")
                         self.store.update_experiment(experiment_id, phase="paused")
                         self.store.add_message(
                             role="system",

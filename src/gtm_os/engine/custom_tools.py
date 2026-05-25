@@ -501,7 +501,12 @@ def build_custom_tools(
         return {"ok": True, "schedule_id": sched.id, "next_run_at": sched.next_run_at}
 
     async def _request_approval(experiment_id: str, message: str) -> dict[str, Any]:
-        # Pause the experiment and surface a message; UI will display the pending approval.
+        # Save current phase as resume target before pausing.
+        exp = store.get_experiment(experiment_id)
+        if exp and exp.phase not in {"paused", "complete"}:
+            cfg = dict(exp.config)
+            cfg["_resume_to"] = exp.phase
+            store.update_experiment(experiment_id, config=cfg)
         exp = store.update_experiment(experiment_id, phase="paused")
         store.add_message(
             role="system",
