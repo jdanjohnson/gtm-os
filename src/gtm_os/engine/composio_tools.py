@@ -56,12 +56,25 @@ class ComposioIntegration:
                 }
             ]
         try:
+            app_args = [a.upper() for a in apps] if apps else []
+            # Try find_actions_by_use_case first — it filters by both apps and
+            # use_case. If it returns empty (common for some apps), fall back to
+            # get_action_schemas which reliably lists all actions for those apps.
             fn = getattr(ts, "find_actions_by_use_case", None)
+            if fn is not None:
+                actions = await asyncio.to_thread(fn, *app_args, use_case=use_case)
+                if actions:
+                    return _normalize_actions(actions)[:limit]
+            if app_args:
+                fn_schemas = getattr(ts, "get_action_schemas", None)
+                if fn_schemas is not None:
+                    schemas = await asyncio.to_thread(
+                        fn_schemas, apps=app_args, check_connected_accounts=False,
+                    )
+                    return _normalize_actions(schemas)[:limit]
             if fn is None:
                 return [{"error": "unsupported_sdk_method"}]
-            app_args = [a.upper() for a in apps] if apps else []
-            actions = await asyncio.to_thread(fn, *app_args, use_case=use_case)
-            return _normalize_actions(actions)[:limit]
+            return []
         except Exception as exc:
             logger.exception("composio discover failed")
             return [{"error": "discover_failed", "message": str(exc)}]
@@ -100,10 +113,10 @@ class ComposioIntegration:
                 "message": "Composio isn't configured.",
             }
         try:
-            fn = getattr(ts, "initiate_connection", None) or getattr(ts, "manage_connection", None)
+            fn = getattr(ts, "initiate_connection", None)
             if fn is None:
                 return {"ok": False, "error": "unsupported_sdk_method"}
-            result = await asyncio.to_thread(fn, integration=toolkit)
+            result = await asyncio.to_thread(fn, app=toolkit.upper())
             return {"ok": True, "toolkit": toolkit, "result": _normalize_value(result)}
         except Exception as exc:
             logger.exception("composio connect failed")
