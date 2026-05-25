@@ -56,10 +56,20 @@ class ComposioIntegration:
                 }
             ]
         try:
+            app_args = [a.upper() for a in apps] if apps else []
+            # Prefer get_action_schemas when filtering by app — it returns full
+            # action metadata and respects connected accounts. Fall back to
+            # find_actions_by_use_case for pure use-case search without apps.
+            if app_args:
+                fn = getattr(ts, "get_action_schemas", None)
+                if fn is not None:
+                    schemas = await asyncio.to_thread(
+                        fn, apps=app_args, check_connected_accounts=False,
+                    )
+                    return _normalize_actions(schemas)[:limit]
             fn = getattr(ts, "find_actions_by_use_case", None)
             if fn is None:
                 return [{"error": "unsupported_sdk_method"}]
-            app_args = [a.upper() for a in apps] if apps else []
             actions = await asyncio.to_thread(fn, *app_args, use_case=use_case)
             return _normalize_actions(actions)[:limit]
         except Exception as exc:
@@ -100,10 +110,10 @@ class ComposioIntegration:
                 "message": "Composio isn't configured.",
             }
         try:
-            fn = getattr(ts, "initiate_connection", None) or getattr(ts, "manage_connection", None)
+            fn = getattr(ts, "initiate_connection", None)
             if fn is None:
                 return {"ok": False, "error": "unsupported_sdk_method"}
-            result = await asyncio.to_thread(fn, integration=toolkit)
+            result = await asyncio.to_thread(fn, app=toolkit.upper())
             return {"ok": True, "toolkit": toolkit, "result": _normalize_value(result)}
         except Exception as exc:
             logger.exception("composio connect failed")
