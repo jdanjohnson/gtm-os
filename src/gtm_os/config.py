@@ -78,6 +78,7 @@ class Config:
     budgets: BudgetConfig = field(default_factory=BudgetConfig)
     composio_api_key: str | None = None
     pipedream_api_key: str | None = None
+    cua_api_key: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -158,6 +159,7 @@ def load_config(config_path: Path | None = None) -> Config:
 
     composio_key = api_keys_raw.get("composio") or os.environ.get("COMPOSIO_API_KEY")
     pipedream_key = api_keys_raw.get("pipedream") or os.environ.get("PIPEDREAM_API_KEY")
+    cua_key = api_keys_raw.get("cua") or os.environ.get("CUA_API_KEY")
 
     return Config(
         project_root=root,
@@ -170,6 +172,7 @@ def load_config(config_path: Path | None = None) -> Config:
         budgets=budgets,
         composio_api_key=composio_key,
         pipedream_api_key=pipedream_key,
+        cua_api_key=cua_key,
         raw=merged,
     )
 
@@ -186,6 +189,7 @@ def _resolve_llm_api_key(model: str) -> str | None:
         "groq": "GROQ_API_KEY",
         "mistral": "MISTRAL_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",
+        "moonshot": "MOONSHOT_API_KEY",
         "google": "GOOGLE_API_KEY",
         "gemini": "GOOGLE_API_KEY",
         "azure": "AZURE_API_KEY",

@@ -14,6 +14,7 @@ import IntegrationsView from "./components/IntegrationsView";
 import Settings from "./components/Settings";
 import {
   Experiment,
+  PlayMeta,
   getHealth,
   getPrimitives,
   listExperiments,
@@ -43,6 +44,7 @@ export default function App() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [memoryCount, setMemoryCount] = useState(0);
   const [trustScores, setTrustScores] = useState<Record<string, number>>({});
+  const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getHealth().then(setHealth).catch(() => null);
@@ -159,7 +161,17 @@ export default function App() {
           />
         );
       case "plays":
-        return <PlaysLibrary primitives={primitives} />;
+        return (
+          <PlaysLibrary
+            primitives={primitives}
+            onUsePlay={(play: PlayMeta, mode: "use" | "fork") => {
+              const verb = mode === "fork" ? "Fork and customize" : "Use";
+              const msg = `${verb} the "${play.name}" play (${play.id}). ${play.description}`;
+              setPendingChatMessage(msg);
+              setChatCollapsed(false);
+            }}
+          />
+        );
       case "memory":
         return <MemoryBrowser />;
       case "agents":
@@ -230,6 +242,8 @@ export default function App() {
               experimentId={activeTab}
               primitives={primitives}
               experimentNames={experimentNames}
+              pendingMessage={pendingChatMessage}
+              onPendingMessageConsumed={() => setPendingChatMessage(null)}
               onSwitchExperiment={(id) => {
                 if (id) openExperimentTab(id);
                 else setActiveTab(null);
