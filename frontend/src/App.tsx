@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
 import Sidebar from "./components/Sidebar";
-import ExperimentTabs from "./components/ExperimentTabs";
-import StatusBar from "./components/StatusBar";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import ExperimentDetail from "./components/ExperimentDetail";
@@ -96,12 +94,6 @@ export default function App() {
   const experimentNames = useMemo(() => {
     const map: Record<string, string> = {};
     for (const e of experiments) map[e.id] = e.name;
-    return map;
-  }, [experiments]);
-
-  const experimentPhases = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const e of experiments) map[e.id] = e.phase;
     return map;
   }, [experiments]);
 
@@ -198,23 +190,8 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0F0F0F] text-[#FAFAFA]">
-      {/* Top bar: experiment tabs */}
-      <ExperimentTabs
-        openTabs={openTabs}
-        activeTab={activeTab}
-        experimentNames={experimentNames}
-        experimentPhases={experimentPhases}
-        onSelectTab={setActiveTab}
-        onCloseTab={closeTab}
-        onNewExperiment={() => {
-          setActiveTab(null);
-          setSidebarView("dashboard");
-        }}
-        health={health}
-      />
-
-      {/* Main three-panel layout */}
+    <div className="flex h-screen w-screen overflow-hidden text-gray-900">
+      {/* Three-panel layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar */}
         <Sidebar
@@ -230,7 +207,7 @@ export default function App() {
         />
 
         {/* Content area */}
-        <main className="flex-1 overflow-y-auto bg-[#0F0F0F]">
+        <main className="flex-1 overflow-y-auto">
           {renderContent()}
         </main>
 
@@ -238,19 +215,25 @@ export default function App() {
         {chatCollapsed ? (
           <button
             onClick={() => setChatCollapsed(false)}
-            className="flex w-8 flex-col items-center justify-center border-l border-[#2A2A2A] bg-[#1A1A1A] text-xs text-[#A1A1AA] hover:text-white"
+            className="flex w-8 flex-col items-center justify-center border-l border-black/[0.06] glass-subtle text-xs text-gray-400 hover:text-gray-700"
           >
             <span className="writing-vertical-lr rotate-180 whitespace-nowrap tracking-wider">
               Chat
             </span>
           </button>
         ) : (
-          <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#2A2A2A] bg-[#1A1A1A]">
-            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-3 py-1.5">
-              <span className="text-xs font-medium text-[#A1A1AA]">Chat</span>
+          <aside className="flex w-[380px] shrink-0 flex-col border-l border-white/30 glass">
+            <div className="flex items-center justify-between border-b border-black/[0.05] px-4 py-2">
+              <div className="flex items-center gap-2.5">
+                <span className="text-[14px] font-semibold text-gray-900">Chat</span>
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/[0.08] px-2.5 py-[2px] text-[10px] font-semibold text-emerald-600">
+                  <span className="h-[5px] w-[5px] rounded-full bg-emerald-500 animate-pulse" />
+                  Online
+                </span>
+              </div>
               <button
                 onClick={() => setChatCollapsed(true)}
-                className="rounded p-1 text-[#A1A1AA] hover:bg-[#2A2A2A] hover:text-white"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-black/[0.04] hover:text-gray-700"
               >
                 <span className="text-xs">−</span>
               </button>
@@ -269,14 +252,6 @@ export default function App() {
           </aside>
         )}
       </div>
-
-      {/* Bottom status bar */}
-      <StatusBar
-        avgTrust={avgTrust}
-        activeExperimentCount={activeExperiments.length}
-        memoryCount={memoryCount}
-        model={health?.model}
-      />
     </div>
   );
 }
@@ -291,27 +266,35 @@ function ExperimentListView({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="p-6">
-      <h1 className="mb-4 text-xl font-semibold">Experiments</h1>
+    <div className="p-7">
+      <h1 className="mb-5 text-xl font-bold text-gray-900">Experiments</h1>
       {experiments.length === 0 ? (
-        <p className="text-sm text-[#A1A1AA]">No experiments yet. Create one from the dashboard or chat.</p>
+        <div className="glass-heavy flex flex-col items-center rounded-2xl p-10 text-center">
+          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full text-3xl glass">
+            🧪
+          </div>
+          <div className="text-[15px] font-semibold text-gray-900">No experiments yet</div>
+          <div className="mt-1 text-[12px] text-gray-500">Create one from the dashboard or chat.</div>
+        </div>
       ) : (
         <div className="space-y-2">
           {experiments.map((e) => (
             <button
               key={e.id}
               onClick={() => onSelect(e.id)}
-              className="flex w-full items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-left hover:border-[#3A3A3A]"
+              className="flex w-full items-center justify-between rounded-2xl p-4 text-left transition-all glass-heavy hover:-translate-y-0.5 hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]"
             >
-              <div>
-                <div className="font-medium">{e.name}</div>
-                <div className="mt-0.5 text-xs text-[#A1A1AA]">
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-gray-900">{e.name}</div>
+                <div className="mt-0.5 truncate text-xs text-gray-500">
                   {e.hypothesis || "No hypothesis"}
                 </div>
               </div>
               <div className="flex items-center gap-3 text-xs">
-                <span className={phaseColor(e.phase)}>{e.phase}</span>
-                <span className="text-[#A1A1AA]">
+                <span className={clsx("rounded-full px-2.5 py-[2px] text-[11px] font-semibold", phaseStyle(e.phase))}>
+                  {e.phase}
+                </span>
+                <span className="text-gray-400">
                   {e.tokens_used.toLocaleString()} / {e.token_budget.toLocaleString()}
                 </span>
               </div>
@@ -323,16 +306,15 @@ function ExperimentListView({
   );
 }
 
-
-function phaseColor(phase: string) {
+function phaseStyle(phase: string): string {
   const map: Record<string, string> = {
-    design: "text-yellow-400",
-    build: "text-blue-400",
-    execute: "text-green-400",
-    measure: "text-orange-400",
-    learn: "text-purple-400",
-    complete: "text-gray-400",
-    paused: "text-red-400",
+    design: "bg-amber-500/10 text-amber-600",
+    build: "bg-blue-500/10 text-blue-600",
+    execute: "bg-emerald-500/10 text-emerald-600",
+    measure: "bg-orange-500/10 text-orange-600",
+    learn: "bg-purple-500/10 text-purple-600",
+    complete: "bg-gray-400/10 text-gray-500",
+    paused: "bg-red-400/10 text-red-500",
   };
-  return map[phase] ?? "text-gray-400";
+  return map[phase] ?? "bg-gray-400/10 text-gray-500";
 }

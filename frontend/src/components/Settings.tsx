@@ -106,13 +106,13 @@ export default function Settings() {
   );
 
   return (
-    <div className="max-w-3xl space-y-6 p-6">
+    <div className="max-w-3xl space-y-6 p-7">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Settings</h1>
+        <h1 className="text-xl font-bold text-gray-900">Settings</h1>
         <button
           onClick={save}
           disabled={saving || !dirty}
-          className="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-md bg-coral px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-coral-hover disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {saving ? "Saving…" : saved ? "Saved" : "Save Changes"}
         </button>
@@ -129,6 +129,7 @@ export default function Settings() {
           <InfoRow label="Primitives" value={health?.primitives_dir ?? "—"} mono small />
         </div>
       </Section>
+
 
       {/* Brand Identity */}
       <Section title="Brand Identity">
@@ -185,8 +186,8 @@ export default function Settings() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-      <h2 className="mb-3 text-sm font-semibold text-[#A1A1AA] uppercase tracking-wider">{title}</h2>
+    <div className="glass-heavy rounded-2xl p-5">
+      <h2 className="mb-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">{title}</h2>
       {children}
     </div>
   );
@@ -195,8 +196,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function InfoRow({ label, value, mono, small }: { label: string; value: string; mono?: boolean; small?: boolean }) {
   return (
     <div>
-      <span className="text-[#A1A1AA] text-xs">{label}</span>
-      <div className={`${mono ? "font-mono" : ""} ${small ? "text-xs" : "text-sm"} text-[#FAFAFA]`}>{value}</div>
+      <span className="text-gray-500 text-xs">{label}</span>
+      <div className={`${mono ? "font-mono" : ""} ${small ? "text-xs" : "text-sm"} text-gray-900`}>{value}</div>
     </div>
   );
 }
@@ -208,13 +209,13 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-xs text-[#A1A1AA]">{label}</label>
+      <label className="mb-1 block text-xs text-gray-500">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#FAFAFA] placeholder-[#555] outline-none focus:border-emerald-600 transition-colors"
+        className="w-full rounded-md border border-black/[0.06] bg-black/[0.03] px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-coral/40 transition-colors"
       />
     </div>
   );
@@ -227,13 +228,13 @@ function TextArea({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-xs text-[#A1A1AA]">{label}</label>
+      <label className="mb-1 block text-xs text-gray-500">{label}</label>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#FAFAFA] placeholder-[#555] outline-none focus:border-emerald-600 transition-colors resize-y"
+        className="w-full rounded-md border border-black/[0.06] bg-black/[0.03] px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-coral/40 transition-colors resize-y"
       />
     </div>
   );
@@ -246,12 +247,12 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-xs text-[#A1A1AA]">{label}</label>
+      <label className="mb-1 block text-xs text-gray-500">{label}</label>
       <input
         type="number"
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
-        className="w-full rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#FAFAFA] outline-none focus:border-emerald-600 transition-colors"
+        className="w-full rounded-md border border-black/[0.06] bg-black/[0.03] px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-coral/40 transition-colors"
       />
     </div>
   );
@@ -271,10 +272,10 @@ function EditableList({
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <label className="text-xs text-[#A1A1AA]">{label}</label>
+        <label className="text-xs text-gray-500">{label}</label>
         <button
           onClick={() => onAdd(field)}
-          className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+          className="text-xs text-coral hover:text-coral-hover transition-colors"
         >
           + Add
         </button>
@@ -287,22 +288,23 @@ function EditableList({
               value={item}
               onChange={(e) => onUpdate(field, idx, e.target.value)}
               placeholder={placeholder}
-              className="flex-1 rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1 text-sm text-[#FAFAFA] placeholder-[#555] outline-none focus:border-emerald-600 transition-colors"
+              className="flex-1 rounded-md border border-black/[0.06] bg-black/[0.03] px-3 py-1 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-coral/40 transition-colors"
             />
             <button
               onClick={() => onRemove(field, idx)}
-              className="rounded p-1 text-[#A1A1AA] hover:bg-[#2A2A2A] hover:text-red-400 transition-colors"
+              className="rounded p-1 text-gray-500 hover:bg-black/[0.04] hover:text-red-400 transition-colors"
             >
               ✕
             </button>
           </div>
         ))}
         {items.length === 0 && (
-          <p className="text-xs text-[#555] italic">No items yet. Click + Add to start.</p>
+          <p className="text-xs text-gray-400 italic">No items yet. Click + Add to start.</p>
         )}
       </div>
     </div>
   );
 }
+
 
 
