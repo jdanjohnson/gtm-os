@@ -41,7 +41,9 @@ class ComposioIntegration:
             logger.warning("composio not available: %s", exc)
             return None
 
-    async def discover_tools(self, use_case: str, *, limit: int = 10) -> list[dict[str, Any]]:
+    async def discover_tools(
+        self, use_case: str, *, apps: list[str] | None = None, limit: int = 10,
+    ) -> list[dict[str, Any]]:
         ts = self._ensure_toolset()
         if ts is None:
             return [
@@ -57,7 +59,8 @@ class ComposioIntegration:
             fn = getattr(ts, "find_actions_by_use_case", None)
             if fn is None:
                 return [{"error": "unsupported_sdk_method"}]
-            actions = await asyncio.to_thread(fn, use_case=use_case)
+            app_args = [a.upper() for a in apps] if apps else []
+            actions = await asyncio.to_thread(fn, *app_args, use_case=use_case)
             return _normalize_actions(actions)[:limit]
         except Exception as exc:
             logger.exception("composio discover failed")
@@ -132,8 +135,10 @@ def _normalize_value(value: Any) -> Any:
 def build_composio_tools(composio: ComposioIntegration) -> list[Tool]:
     """Tool definitions the agent can call to use Composio."""
 
-    async def _discover(use_case: str, limit: int = 10) -> Any:
-        return await composio.discover_tools(use_case, limit=int(limit))
+    async def _discover(
+        use_case: str, apps: list[str] | None = None, limit: int = 10,
+    ) -> Any:
+        return await composio.discover_tools(use_case, apps=apps, limit=int(limit))
 
     async def _execute(action: str, params: dict[str, Any] | None = None) -> Any:
         return await composio.execute_action(action, params or {})
@@ -145,9 +150,11 @@ def build_composio_tools(composio: ComposioIntegration) -> list[Tool]:
         Tool(
             name="composio_discover_tools",
             description=(
-                "Search Composio for real integrations that match a use-case description. "
-                "Use this to find tools like 'send email via gmail', 'search people on apollo', "
-                "'post to slack', 'create row in google sheets', etc."
+                "Search Composio for actions that match a use-case description. "
+                "IMPORTANT: Always pass the 'apps' parameter to filter results to "
+                "specific apps (e.g. ['GMAIL', 'SLACK']). Without 'apps', results "
+                "will be unfocused. Use this to find tools like 'send email via "
+                "gmail', 'search people on apollo', 'post to slack', etc."
             ),
             parameters={
                 "type": "object",
@@ -155,6 +162,14 @@ def build_composio_tools(composio: ComposioIntegration) -> list[Tool]:
                     "use_case": {
                         "type": "string",
                         "description": "Plain-English description of what you want to do.",
+                    },
+                    "apps": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Filter to specific Composio apps (e.g. ['GMAIL', 'SLACK', "
+                            "'APOLLO', 'HUBSPOT']). Strongly recommended for relevant results."
+                        ),
                     },
                     "limit": {
                         "type": "integer",
