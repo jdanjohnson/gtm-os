@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import __version__
 from ..config import Config, load_config
 from ..engine.composio_tools import ComposioIntegration
+from ..engine.cua_tools import CUAIntegration
 from ..engine.experiment import ExperimentRunner
 from ..engine.memory import VectorMemory
 from ..engine.pipedream_tools import PipedreamIntegration
@@ -39,6 +40,7 @@ class AppState:
     memory: VectorMemory
     composio: ComposioIntegration
     pipedream: PipedreamIntegration
+    cua: CUAIntegration
     runner: ExperimentRunner
     scheduler: Scheduler | None
 
@@ -51,10 +53,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         store = Store(cfg.db_path)
         composio = ComposioIntegration(cfg.composio_api_key)
         pipedream = PipedreamIntegration(cfg.pipedream_api_key)
+        cua = CUAIntegration(cfg.cua_api_key)
         memory = VectorMemory(store, cfg.llm)
         runner = ExperimentRunner(
             config=cfg, store=store, memory=memory,
-            composio=composio, pipedream=pipedream,
+            composio=composio, pipedream=pipedream, cua=cua,
         )
         scheduler: Scheduler | None = None
         if cfg.scheduler.enabled:
@@ -67,6 +70,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         app.state.gtm.memory = memory
         app.state.gtm.composio = composio
         app.state.gtm.pipedream = pipedream
+        app.state.gtm.cua = cua
         app.state.gtm.runner = runner
         app.state.gtm.scheduler = scheduler
 
@@ -99,6 +103,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             "scheduler_running": bool(gtm.scheduler and gtm.scheduler.running),
             "composio_configured": gtm.composio.configured,
             "pipedream_configured": gtm.pipedream.configured,
+            "cua_configured": gtm.cua.configured,
             "primitives_dir": str(gtm.config.primitives_dir),
         }
 

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from ...engine.composio_tools import ComposioIntegration
+from ...engine.cua_tools import CUAIntegration
 from ...engine.pipedream_tools import PipedreamIntegration
 
 router = APIRouter()
@@ -31,6 +32,7 @@ class IntegrationStatus(BaseModel):
 class IntegrationKeyUpdate(BaseModel):
     composio_api_key: str | None = None
     pipedream_api_key: str | None = None
+    cua_api_key: str | None = None
 
 
 class ToolKeyStatus(BaseModel):
@@ -47,6 +49,21 @@ class ToolKeyUpdate(BaseModel):
     serper_api_key: str | None = None
     brave_search_api_key: str | None = None
     youtube_api_key: str | None = None
+
+
+class ModelKeyUpdate(BaseModel):
+    deepseek_api_key: str | None = None
+    moonshot_api_key: str | None = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    groq_api_key: str | None = None
+    google_api_key: str | None = None
+
+
+class ModelConfigUpdate(BaseModel):
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
 
 
 class ConnectRequest(BaseModel):
@@ -77,6 +94,7 @@ async def get_integrations(request: Request) -> dict[str, Any]:
     gtm = request.app.state.gtm
     composio: ComposioIntegration = gtm.composio
     pipedream: PipedreamIntegration = gtm.pipedream
+    cua: CUAIntegration = gtm.cua
 
     return {
         "integrations": [
@@ -108,6 +126,20 @@ async def get_integrations(request: Request) -> dict[str, Any]:
                     "Run workflows and actions via API."
                 ),
             },
+            {
+                "name": "cua",
+                "label": "CUA (Computer-Use Agent)",
+                "configured": cua.configured,
+                "masked_key": _mask_key(cua.api_key),
+                "has_env_key": bool(os.environ.get("CUA_API_KEY")),
+                "env_var": "CUA_API_KEY",
+                "docs_url": "https://docs.cua.ai",
+                "dashboard_url": "https://cua.ai",
+                "description": (
+                    "Give agents their own virtual computer for browser/GUI automation. "
+                    "Navigate LinkedIn, fill CRM forms, scrape dynamic pages."
+                ),
+            },
         ]
     }
 
@@ -129,6 +161,8 @@ async def update_integration_keys(request: Request, body: IntegrationKeyUpdate) 
         key_updates["COMPOSIO_API_KEY"] = body.composio_api_key
     if body.pipedream_api_key is not None:
         key_updates["PIPEDREAM_API_KEY"] = body.pipedream_api_key
+    if body.cua_api_key is not None:
+        key_updates["CUA_API_KEY"] = body.cua_api_key
 
     # Build new .env content.
     new_lines: list[str] = []
@@ -175,6 +209,14 @@ async def update_integration_keys(request: Request, body: IntegrationKeyUpdate) 
         gtm.runner.pipedream = gtm.pipedream
         gtm.config.pipedream_api_key = new_key
         updated.append("pipedream")
+
+    if body.cua_api_key is not None:
+        new_key = body.cua_api_key or None
+        os.environ["CUA_API_KEY"] = body.cua_api_key or ""
+        gtm.cua = CUAIntegration(new_key)
+        gtm.runner.cua = gtm.cua
+        gtm.config.cua_api_key = new_key
+        updated.append("cua")
 
     logger.info("Integration keys updated: %s", ", ".join(updated))
     return {"ok": True, "updated": updated}
@@ -294,6 +336,207 @@ async def update_tool_keys(request: Request, body: ToolKeyUpdate) -> dict[str, A
 
     logger.info("Tool keys updated: %s", ", ".join(updated))
     return {"ok": True, "updated": updated}
+
+
+# ---------------------------------------------------------------------------
+# LLM Model Provider Keys
+# ---------------------------------------------------------------------------
+
+_MODEL_KEY_DEFS: list[dict[str, Any]] = [
+    {
+        "name": "deepseek",
+        "label": "DeepSeek",
+        "env_var": "DEEPSEEK_API_KEY",
+        "models": ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"],
+        "description": "DeepSeek AI models — high quality, affordable reasoning and chat.",
+        "docs_url": "https://platform.deepseek.com",
+    },
+    {
+        "name": "moonshot",
+        "label": "Kimi (Moonshot AI)",
+        "env_var": "MOONSHOT_API_KEY",
+        "models": [
+            "moonshot/moonshot-v1-8k",
+            "moonshot/moonshot-v1-32k",
+            "moonshot/moonshot-v1-128k",
+        ],
+        "description": "Kimi by Moonshot AI — strong multilingual models with large context windows.",
+        "docs_url": "https://platform.moonshot.cn",
+    },
+    {
+        "name": "openai",
+        "label": "OpenAI",
+        "env_var": "OPENAI_API_KEY",
+        "models": ["openai/gpt-4o", "openai/gpt-4o-mini", "openai/o1", "openai/o3-mini"],
+        "description": "OpenAI GPT models — GPT-4o, o1, o3-mini.",
+        "docs_url": "https://platform.openai.com",
+    },
+    {
+        "name": "anthropic",
+        "label": "Anthropic",
+        "env_var": "ANTHROPIC_API_KEY",
+        "models": [
+            "anthropic/claude-sonnet-4",
+            "anthropic/claude-opus-4",
+            "anthropic/claude-haiku-3.5",
+        ],
+        "description": "Anthropic Claude models — Claude Sonnet, Opus, Haiku.",
+        "docs_url": "https://console.anthropic.com",
+    },
+    {
+        "name": "groq",
+        "label": "Groq",
+        "env_var": "GROQ_API_KEY",
+        "models": ["groq/llama-3.3-70b-versatile", "groq/mixtral-8x7b-32768"],
+        "description": "Groq inference — ultra-fast LLM inference for open models.",
+        "docs_url": "https://console.groq.com",
+    },
+    {
+        "name": "google",
+        "label": "Google (Gemini)",
+        "env_var": "GOOGLE_API_KEY",
+        "models": ["gemini/gemini-2.5-pro", "gemini/gemini-2.5-flash"],
+        "description": "Google Gemini models via AI Studio or Vertex.",
+        "docs_url": "https://aistudio.google.com",
+    },
+]
+
+
+@router.get("/integrations/model-keys")
+async def get_model_keys(request: Request) -> dict[str, Any]:
+    """Return status of LLM provider API keys and available models."""
+    gtm = request.app.state.gtm
+    providers = []
+    all_models: list[dict[str, str]] = []
+    for defn in _MODEL_KEY_DEFS:
+        env_val = os.environ.get(defn["env_var"], "")
+        configured = bool(env_val)
+        providers.append({
+            "name": defn["name"],
+            "label": defn["label"],
+            "env_var": defn["env_var"],
+            "configured": configured,
+            "masked_key": _mask_key(env_val) if env_val else "",
+            "models": defn["models"],
+            "description": defn["description"],
+            "docs_url": defn["docs_url"],
+        })
+        if configured:
+            for m in defn["models"]:
+                all_models.append({"id": m, "provider": defn["label"]})
+    return {
+        "providers": providers,
+        "available_models": all_models,
+        "current_model": gtm.config.llm.model,
+        "current_temperature": gtm.config.llm.temperature,
+        "current_max_tokens": gtm.config.llm.max_tokens,
+    }
+
+
+@router.put("/integrations/model-keys")
+async def update_model_keys(request: Request, body: ModelKeyUpdate) -> dict[str, Any]:
+    """Persist LLM provider API keys to .env and hot-reload."""
+    env_path = _env_file_path(request)
+    updated: list[str] = []
+
+    key_updates: dict[str, str | None] = {}
+    if body.deepseek_api_key is not None:
+        key_updates["DEEPSEEK_API_KEY"] = body.deepseek_api_key
+    if body.moonshot_api_key is not None:
+        key_updates["MOONSHOT_API_KEY"] = body.moonshot_api_key
+    if body.openai_api_key is not None:
+        key_updates["OPENAI_API_KEY"] = body.openai_api_key
+    if body.anthropic_api_key is not None:
+        key_updates["ANTHROPIC_API_KEY"] = body.anthropic_api_key
+    if body.groq_api_key is not None:
+        key_updates["GROQ_API_KEY"] = body.groq_api_key
+    if body.google_api_key is not None:
+        key_updates["GOOGLE_API_KEY"] = body.google_api_key
+
+    if not key_updates:
+        return {"ok": True, "updated": []}
+
+    existing_lines: list[str] = []
+    if env_path.exists():
+        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
+
+    new_lines: list[str] = []
+    seen_keys: set[str] = set()
+    for line in existing_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        eq_idx = stripped.find("=")
+        if eq_idx == -1:
+            new_lines.append(line)
+            continue
+        env_key = stripped[:eq_idx].strip()
+        if env_key in key_updates:
+            val = key_updates[env_key]
+            if val:
+                new_lines.append(f"{env_key}={val}")
+            seen_keys.add(env_key)
+        else:
+            new_lines.append(line)
+
+    for env_key, val in key_updates.items():
+        if env_key not in seen_keys and val:
+            new_lines.append(f"{env_key}={val}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+    for env_key, val in key_updates.items():
+        if val:
+            os.environ[env_key] = val
+            updated.append(env_key)
+        else:
+            os.environ.pop(env_key, None)
+            updated.append(env_key)
+
+    # Hot-reload: re-resolve the LLM API key for the current model.
+    gtm = request.app.state.gtm
+    from ...config import _resolve_llm_api_key
+
+    new_api_key = _resolve_llm_api_key(gtm.config.llm.model)
+    if new_api_key:
+        gtm.config.llm.api_key = new_api_key
+
+    logger.info("Model keys updated: %s", ", ".join(updated))
+    return {"ok": True, "updated": updated}
+
+
+@router.put("/integrations/model-config")
+async def update_model_config(request: Request, body: ModelConfigUpdate) -> dict[str, Any]:
+    """Switch the active model or adjust LLM parameters. Hot-reloads immediately."""
+    gtm = request.app.state.gtm
+    changes: list[str] = []
+
+    if body.model is not None and body.model != gtm.config.llm.model:
+        gtm.config.llm.model = body.model
+        from ...config import _resolve_llm_api_key
+
+        new_api_key = _resolve_llm_api_key(body.model)
+        if new_api_key:
+            gtm.config.llm.api_key = new_api_key
+        changes.append(f"model={body.model}")
+
+    if body.temperature is not None:
+        gtm.config.llm.temperature = body.temperature
+        changes.append(f"temperature={body.temperature}")
+
+    if body.max_tokens is not None:
+        gtm.config.llm.max_tokens = body.max_tokens
+        changes.append(f"max_tokens={body.max_tokens}")
+
+    logger.info("Model config updated: %s", ", ".join(changes))
+    return {
+        "ok": True,
+        "changes": changes,
+        "model": gtm.config.llm.model,
+        "temperature": gtm.config.llm.temperature,
+        "max_tokens": gtm.config.llm.max_tokens,
+    }
 
 
 # ---------------------------------------------------------------------------

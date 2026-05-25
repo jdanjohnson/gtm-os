@@ -20,6 +20,7 @@ from ..types import Experiment, Primitives
 from .composio_tools import ComposioIntegration, build_composio_tools
 from .context import assemble_context
 from .context_manager import ContextManager
+from .cua_tools import CUAIntegration, build_cua_tools
 from .custom_tools import build_custom_tools
 from .durability import DurableContext
 from .harness import HarnessOptions, run_agent
@@ -75,6 +76,7 @@ class ExperimentRunner:
         memory: VectorMemory,
         composio: ComposioIntegration,
         pipedream: PipedreamIntegration | None = None,
+        cua: CUAIntegration | None = None,
         context_manager: ContextManager | None = None,
     ) -> None:
         self.config = config
@@ -82,6 +84,7 @@ class ExperimentRunner:
         self.memory = memory
         self.composio = composio
         self.pipedream = pipedream or PipedreamIntegration(None)
+        self.cua = cua or CUAIntegration(None)
         self.context_manager = context_manager or ContextManager(config.llm)
         self._primitives_cache: tuple[float, Primitives] | None = None
 
@@ -115,7 +118,8 @@ class ExperimentRunner:
         )
         composio = build_composio_tools(self.composio)
         pipedream = build_pipedream_tools(self.pipedream)
-        return custom + composio + pipedream
+        cua = build_cua_tools(self.cua)
+        return custom + composio + pipedream + cua
 
     # ---------- create / mutate ----------
 

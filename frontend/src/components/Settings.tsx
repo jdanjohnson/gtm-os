@@ -124,6 +124,7 @@ export default function Settings() {
           <InfoRow label="Model" value={health?.model ?? "—"} mono />
           <InfoRow label="Composio" value={health?.composio_configured ? "Connected" : "Not configured"} />
           <InfoRow label="Pipedream" value={health?.pipedream_configured ? "Connected" : "Not configured"} />
+          <InfoRow label="CUA" value={health?.cua_configured ? "Connected" : "Not configured"} />
           <InfoRow label="Scheduler" value={health?.scheduler_running ? "Running" : "Stopped"} />
           <InfoRow label="Primitives" value={health?.primitives_dir ?? "—"} mono small />
         </div>

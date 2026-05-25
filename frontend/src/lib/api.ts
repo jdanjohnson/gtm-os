@@ -106,6 +106,7 @@ export async function getHealth() {
     scheduler_running: boolean;
     composio_configured: boolean;
     pipedream_configured: boolean;
+    cua_configured: boolean;
     primitives_dir: string;
   }>("/api/health");
 }
@@ -241,10 +242,70 @@ export async function getIntegrations() {
 export async function updateIntegrationKeys(keys: {
   composio_api_key?: string;
   pipedream_api_key?: string;
+  cua_api_key?: string;
 }) {
   return json<{ ok: boolean; updated: string[] }>("/api/integrations/keys", {
     method: "PUT",
     body: JSON.stringify(keys),
+  });
+}
+
+// --- LLM Model Provider Keys ---
+
+export interface ModelProviderInfo {
+  name: string;
+  label: string;
+  env_var: string;
+  configured: boolean;
+  masked_key: string;
+  models: string[];
+  description: string;
+  docs_url: string;
+}
+
+export interface AvailableModel {
+  id: string;
+  provider: string;
+}
+
+export async function getModelKeys() {
+  return json<{
+    providers: ModelProviderInfo[];
+    available_models: AvailableModel[];
+    current_model: string;
+    current_temperature: number;
+    current_max_tokens: number;
+  }>("/api/integrations/model-keys");
+}
+
+export async function updateModelKeys(keys: {
+  deepseek_api_key?: string;
+  moonshot_api_key?: string;
+  openai_api_key?: string;
+  anthropic_api_key?: string;
+  groq_api_key?: string;
+  google_api_key?: string;
+}) {
+  return json<{ ok: boolean; updated: string[] }>("/api/integrations/model-keys", {
+    method: "PUT",
+    body: JSON.stringify(keys),
+  });
+}
+
+export async function updateModelConfig(config: {
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
+}) {
+  return json<{
+    ok: boolean;
+    changes: string[];
+    model: string;
+    temperature: number;
+    max_tokens: number;
+  }>("/api/integrations/model-config", {
+    method: "PUT",
+    body: JSON.stringify(config),
   });
 }
 
