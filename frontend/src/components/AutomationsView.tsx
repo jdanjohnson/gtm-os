@@ -14,9 +14,9 @@ export default function AutomationsView() {
   }, []);
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Automations</h1>
+    <div className="p-7">
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-900">Automations</h1>
       </div>
 
       {/* Filter tabs */}
@@ -24,7 +24,7 @@ export default function AutomationsView() {
         {["All", "Active", "Paused"].map((f) => (
           <button
             key={f}
-            className="rounded-md px-3 py-1.5 text-xs text-[#A1A1AA] hover:bg-[#2A2A2A]/50 first:bg-[#2A2A2A] first:text-white"
+            className="rounded-md px-3 py-1.5 text-xs text-gray-500 hover:bg-black/[0.04] first:glass-heavy first:text-gray-900 first:font-semibold"
           >
             {f}
           </button>
@@ -32,7 +32,7 @@ export default function AutomationsView() {
       </div>
 
       {experiments.length === 0 ? (
-        <p className="text-sm text-[#A1A1AA]">
+        <p className="text-sm text-gray-500">
           No scheduled automations yet. Schedule an experiment to create one.
         </p>
       ) : (
@@ -40,11 +40,11 @@ export default function AutomationsView() {
           {experiments.map((e) => (
             <div
               key={e.id}
-              className="flex items-center justify-between rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3"
+              className="flex items-center justify-between glass-heavy rounded-2xl px-4 py-3"
             >
               <div>
                 <div className="font-medium text-sm">{e.name}</div>
-                <div className="mt-0.5 text-xs text-[#A1A1AA]">
+                <div className="mt-0.5 text-xs text-gray-500">
                   Schedule: {e.schedule_id}
                 </div>
               </div>

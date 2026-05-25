@@ -21,15 +21,15 @@ const KIND_COLORS: Record<string, string> = {
   workflow: "border-blue-500/30 bg-blue-500/5",
   skill: "border-purple-500/30 bg-purple-500/5",
   tool: "border-orange-500/30 bg-orange-500/5",
-  play: "border-[#2A2A2A] bg-[#1A1A1A]",
+  play: "border-black/[0.06] glass-heavy",
 };
 
 const KIND_BADGE: Record<string, string> = {
-  playbook: "bg-emerald-500/15 text-emerald-400",
-  workflow: "bg-blue-500/15 text-blue-400",
-  skill: "bg-purple-500/15 text-purple-400",
-  tool: "bg-orange-500/15 text-orange-400",
-  play: "bg-[#2A2A2A] text-[#A1A1AA]",
+  playbook: "bg-emerald-500/15 text-emerald-600",
+  workflow: "bg-blue-500/15 text-blue-600",
+  skill: "bg-purple-500/15 text-purple-600",
+  tool: "bg-orange-500/15 text-orange-600",
+  play: "bg-black/[0.04] text-gray-500",
 };
 
 export default function PlaysLibrary({ primitives }: Props) {
@@ -64,10 +64,10 @@ export default function PlaysLibrary({ primitives }: Props) {
   }, [plays]);
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Plays</h1>
-        <span className="text-xs text-[#A1A1AA]">
+    <div className="p-7">
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-900">Plays</h1>
+        <span className="text-xs text-gray-500">
           {filtered.length} of {plays.length} items
         </span>
       </div>
@@ -80,8 +80,8 @@ export default function PlaysLibrary({ primitives }: Props) {
             onClick={() => setKindFilter(tab)}
             className={`rounded-md px-3 py-1.5 text-xs transition-colors ${
               kindFilter === tab
-                ? "bg-[#2A2A2A] text-white"
-                : "text-[#A1A1AA] hover:bg-[#2A2A2A]/50"
+                ? "glass-heavy text-gray-900 font-semibold"
+                : "text-gray-500 hover:bg-black/[0.04]"
             }`}
           >
             {tab === "all" ? "All" : `${tab.charAt(0).toUpperCase() + tab.slice(1)}s`}
@@ -99,12 +99,12 @@ export default function PlaysLibrary({ primitives }: Props) {
           placeholder="Search plays..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white placeholder-[#555] focus:border-[#3A3A3A] focus:outline-none"
+          className="w-full rounded-xl border border-black/[0.06] glass-heavy px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-coral/40 focus:outline-none"
         />
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-[#A1A1AA]">
+        <p className="text-sm text-gray-500">
           {plays.length === 0
             ? "No plays found. Add PLAY.md files to your primitives/plays/ directory."
             : "No plays match your filter."}
@@ -114,7 +114,7 @@ export default function PlaysLibrary({ primitives }: Props) {
           {filtered.map((play) => (
             <div
               key={play.id}
-              className={`rounded-xl border p-4 transition-colors hover:border-[#3A3A3A] ${KIND_COLORS[play.kind] || KIND_COLORS.play}`}
+              className={`glass-heavy rounded-2xl p-4 transition-all hover:shadow-md ${KIND_COLORS[play.kind] || KIND_COLORS.play}`}
             >
               <div className="mb-2 flex items-center gap-2">
                 <span>{KIND_ICONS[play.kind] || "📋"}</span>
@@ -127,7 +127,7 @@ export default function PlaysLibrary({ primitives }: Props) {
                   {play.kind}
                 </span>
               </div>
-              <p className="mb-3 text-xs text-[#A1A1AA] line-clamp-2">
+              <p className="mb-3 text-xs text-gray-500 line-clamp-2">
                 {play.description || `${play.kind} for ${play.id}`}
               </p>
               {play.tags.length > 0 && (
@@ -135,23 +135,23 @@ export default function PlaysLibrary({ primitives }: Props) {
                   {play.tags.slice(0, 4).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#A1A1AA]"
+                      className="rounded bg-black/[0.04] px-1.5 py-0.5 text-[10px] text-gray-500"
                     >
                       {tag}
                     </span>
                   ))}
                   {play.tags.length > 4 && (
-                    <span className="text-[10px] text-[#555]">
+                    <span className="text-[10px] text-gray-400">
                       +{play.tags.length - 4}
                     </span>
                   )}
                 </div>
               )}
               <div className="flex gap-2">
-                <button className="rounded bg-emerald-600 px-2.5 py-1 text-xs hover:bg-emerald-500">
+                <button className="rounded-full bg-coral px-3 py-1 text-xs text-white hover:bg-coral-hover">
                   Use Play
                 </button>
-                <button className="rounded bg-[#2A2A2A] px-2.5 py-1 text-xs text-[#A1A1AA] hover:bg-[#3A3A3A]">
+                <button className="rounded-full glass-subtle px-3 py-1 text-xs text-gray-500 hover:bg-black/[0.06]">
                   Fork
                 </button>
               </div>

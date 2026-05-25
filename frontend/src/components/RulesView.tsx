@@ -19,9 +19,9 @@ export default function RulesView() {
   });
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Rules</h1>
+    <div className="p-7">
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-900">Rules</h1>
       </div>
 
       {/* Filter tabs */}
@@ -32,8 +32,8 @@ export default function RulesView() {
             onClick={() => setFilter(f)}
             className={`rounded-md px-3 py-1.5 text-xs ${
               filter === f
-                ? "bg-[#2A2A2A] text-white"
-                : "text-[#A1A1AA] hover:bg-[#2A2A2A]/50"
+                ? "glass-heavy text-gray-900 font-semibold"
+                : "text-gray-500 hover:bg-black/[0.04]"
             }`}
           >
             {f === "auto" ? "Auto-generated" : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -42,7 +42,7 @@ export default function RulesView() {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-[#A1A1AA]">
+        <p className="text-sm text-gray-500">
           {rules.length === 0
             ? "No rules yet. Rules are auto-generated when learnings reach high confidence, or you can create them manually."
             : "No rules match the current filter."}
@@ -52,26 +52,26 @@ export default function RulesView() {
           {filtered.map((rule) => (
             <div
               key={rule.id}
-              className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4"
+              className="glass-heavy rounded-2xl p-4"
             >
               <div className="mb-1 flex items-center gap-2">
                 <span>{rule.source === "manual" ? "🔒" : "🤖"}</span>
-                <span className="text-xs text-[#A1A1AA]">
+                <span className="text-xs text-gray-500">
                   {rule.source === "manual" ? "Manual" : "Auto-generated"} · Confidence: {rule.confidence.toFixed(2)}
                 </span>
               </div>
               <p className="text-sm">{rule.content}</p>
               {rule.experiment_id && (
-                <div className="mt-2 text-[10px] text-[#A1A1AA]">
+                <div className="mt-2 text-[10px] text-gray-500">
                   Source: Experiment {rule.experiment_id.slice(0, 8)}
                 </div>
               )}
               <div className="mt-2 flex gap-2">
-                <button className="rounded bg-[#2A2A2A] px-2.5 py-1 text-xs text-[#A1A1AA] hover:bg-[#3A3A3A]">
+                <button className="rounded bg-black/[0.04] px-2.5 py-1 text-xs text-gray-500 hover:bg-black/[0.06]">
                   Edit
                 </button>
                 {rule.source !== "manual" && (
-                  <button className="rounded bg-[#2A2A2A] px-2.5 py-1 text-xs text-[#A1A1AA] hover:bg-[#3A3A3A]">
+                  <button className="rounded bg-black/[0.04] px-2.5 py-1 text-xs text-gray-500 hover:bg-black/[0.06]">
                     Demote to learning
                   </button>
                 )}
