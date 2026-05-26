@@ -56,6 +56,11 @@ class LLMConfig:
     request_timeout_seconds: int = 120
     api_key: str | None = None
 
+    @property
+    def embedding_api_key(self) -> str | None:
+        """Resolve the correct API key for the embedding model's provider."""
+        return _resolve_llm_api_key(self.embedding_model)
+
 
 @dataclass
 class BudgetConfig:

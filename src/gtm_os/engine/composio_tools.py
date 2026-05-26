@@ -71,7 +71,20 @@ class ComposioIntegration:
                     schemas = await asyncio.to_thread(
                         fn_schemas, apps=app_args, check_connected_accounts=False,
                     )
-                    return _normalize_actions(schemas)[:limit]
+                    normalized = _normalize_actions(schemas)
+                    # Filter by use_case keywords so we don't return every action
+                    keywords = [w.lower() for w in use_case.split() if len(w) > 2]
+                    if keywords:
+                        scored = []
+                        for action in normalized:
+                            text = f"{action.get('name', '')} {action.get('description', '')}".lower()
+                            hits = sum(1 for kw in keywords if kw in text)
+                            if hits > 0:
+                                scored.append((hits, action))
+                        if scored:
+                            scored.sort(key=lambda x: x[0], reverse=True)
+                            return [a for _, a in scored][:limit]
+                    return normalized[:limit]
             if fn is None:
                 return [{"error": "unsupported_sdk_method"}]
             return []
