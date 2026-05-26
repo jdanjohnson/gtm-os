@@ -79,7 +79,7 @@ class VectorMemory:
             response = await litellm.aembedding(
                 model=self.llm_config.embedding_model,
                 input=text,
-                api_key=self.llm_config.api_key,
+                api_key=self.llm_config.embedding_api_key,
                 timeout=self.llm_config.request_timeout_seconds,
             )
             data = response["data"][0]["embedding"]
@@ -98,7 +98,7 @@ class VectorMemory:
             response = await litellm.aembedding(
                 model=self.llm_config.embedding_model,
                 input=texts,
-                api_key=self.llm_config.api_key,
+                api_key=self.llm_config.embedding_api_key,
                 timeout=self.llm_config.request_timeout_seconds,
             )
             results: list[list[float] | None] = []
