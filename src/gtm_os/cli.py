@@ -93,9 +93,12 @@ def init(
         console.print("[red]Could not locate default primitives. Reinstall gtm-os.[/red]")
         raise typer.Exit(code=2)
 
-    if dst.exists():
-        shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    if src.resolve() == dst.resolve():
+        console.print(f"[green]primitives/ already in place at {dst} (dev mode).[/green]")
+    else:
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst)
     console.print(f"[green]Wrote primitives → {dst}[/green]")
 
     cfg_path = target / "gtm-os.config.yaml"
