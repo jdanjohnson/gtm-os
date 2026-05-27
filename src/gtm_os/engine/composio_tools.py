@@ -1,100 +1,109 @@
-"""Composio SDK integration — discover, connect, execute.
+"""Composio REST API v3.1 integration — discover, connect, execute.
 
-We treat Composio as optional: if the SDK isn't installed or no API key is set, we still
-expose `composio_discover_tools` / `composio_execute_action` tools that return a clear
-"not configured" message so the agent can react gracefully.
+Uses the Composio REST API directly instead of the composio-core SDK, which
+relies on retired v2 endpoints (HTTP 410). The v3.1 API is the current
+stable endpoint for tool discovery and execution.
+
+If no API key is set, all tools return a clear "not configured" message so the
+agent can react gracefully.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
+
+import httpx
 
 from ..types import Tool
 
 logger = logging.getLogger(__name__)
 
+COMPOSIO_API = "https://backend.composio.dev"
+
 
 class ComposioIntegration:
-    """Thin wrapper over composio-core. Lazy-imports the SDK so this module always loads."""
+    """Thin wrapper over the Composio v3.1 REST API."""
 
     def __init__(self, api_key: str | None) -> None:
         self.api_key = api_key
-        self._toolset: Any | None = None
 
     @property
     def configured(self) -> bool:
         return bool(self.api_key)
 
-    def _ensure_toolset(self) -> Any | None:
-        if self._toolset is not None:
-            return self._toolset
-        if not self.api_key:
-            return None
-        try:
-            from composio import ComposioToolSet  # type: ignore
+    def _headers(self) -> dict[str, str]:
+        return {"x-api-key": self.api_key or "", "Content-Type": "application/json"}
 
-            self._toolset = ComposioToolSet(api_key=self.api_key)
-            return self._toolset
-        except Exception as exc:  # pragma: no cover — optional dependency
-            logger.warning("composio not available: %s", exc)
-            return None
+    async def _get_connected_account_id(self, app_slug: str) -> str | None:
+        """Find the first ACTIVE connected account for a given app."""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    f"{COMPOSIO_API}/api/v3/connected_accounts",
+                    headers=self._headers(),
+                    params={"limit": 100},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            items = data.get("items", data.get("data", []))
+            for c in items:
+                toolkit = c.get("toolkit", {}) or {}
+                slug = toolkit.get("slug", c.get("appName", ""))
+                if slug.lower() == app_slug.lower() and c.get("status") == "ACTIVE":
+                    return c["id"]
+        except Exception as exc:
+            logger.warning("Failed to fetch connected accounts: %s", exc)
+        return None
 
     async def discover_tools(
         self, use_case: str, *, apps: list[str] | None = None, limit: int = 10,
     ) -> list[dict[str, Any]]:
-        ts = self._ensure_toolset()
-        if ts is None:
+        if not self.api_key:
             return [
                 {
                     "error": "composio_not_configured",
                     "message": (
-                        "Composio isn't configured. Install `composio-core` and set "
-                        "COMPOSIO_API_KEY to enable real tool discovery."
+                        "Composio isn't configured. Set COMPOSIO_API_KEY to "
+                        "enable real tool discovery."
                     ),
                 }
             ]
         try:
-            app_args = [a.upper() for a in apps] if apps else []
-            # Try find_actions_by_use_case first — it filters by both apps and
-            # use_case. If it returns empty (common for some apps), fall back to
-            # get_action_schemas which reliably lists all actions for those apps.
-            fn = getattr(ts, "find_actions_by_use_case", None)
-            if fn is not None:
-                actions = await asyncio.to_thread(fn, *app_args, use_case=use_case)
-                if actions:
-                    return _normalize_actions(actions)[:limit]
-            if app_args:
-                fn_schemas = getattr(ts, "get_action_schemas", None)
-                if fn_schemas is not None:
-                    schemas = await asyncio.to_thread(
-                        fn_schemas, apps=app_args, check_connected_accounts=False,
-                    )
-                    normalized = _normalize_actions(schemas)
-                    # Filter by use_case keywords so we don't return every action
-                    keywords = [w.lower() for w in use_case.split() if len(w) > 2]
-                    if keywords:
-                        scored = []
-                        for action in normalized:
-                            text = f"{action.get('name', '')} {action.get('description', '')}".lower()
-                            hits = sum(1 for kw in keywords if kw in text)
-                            if hits > 0:
-                                scored.append((hits, action))
-                        if scored:
-                            scored.sort(key=lambda x: x[0], reverse=True)
-                            return [a for _, a in scored][:limit]
-                    return normalized[:limit]
-            if fn is None:
-                return [{"error": "unsupported_sdk_method"}]
-            return []
+            params: dict[str, Any] = {"limit": min(limit, 100)}
+            if use_case:
+                params["search"] = use_case
+            if apps:
+                params["toolkits"] = ",".join(a.lower() for a in apps)
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    f"{COMPOSIO_API}/api/v3.1/tools",
+                    headers=self._headers(),
+                    params=params,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            items = data if isinstance(data, list) else (
+                data.get("items") or data.get("tools") or data.get("data") or []
+            )
+            return [
+                {
+                    "action": t.get("slug", t.get("name", "")),
+                    "display_name": t.get("display_name", t.get("name", "")),
+                    "description": t.get("description", ""),
+                    "app": t.get("toolkit", {}).get("slug", "") if isinstance(t.get("toolkit"), dict) else "",
+                }
+                for t in items[:limit]
+                if isinstance(t, dict)
+            ]
         except Exception as exc:
             logger.exception("composio discover failed")
             return [{"error": "discover_failed", "message": str(exc)}]
 
     async def execute_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
-        ts = self._ensure_toolset()
-        if ts is None:
+        if not self.api_key:
             return {
                 "ok": False,
                 "error": "composio_not_configured",
@@ -102,12 +111,51 @@ class ComposioIntegration:
                 "action": action,
                 "echo": params,
             }
+
+        # Derive app slug from action name (e.g. GMAIL_SEND_EMAIL -> gmail).
+        app_slug = action.split("_")[0].lower() if "_" in action else ""
+        conn_id = await self._get_connected_account_id(app_slug) if app_slug else None
+
         try:
-            fn = getattr(ts, "execute_action", None)
-            if fn is None:
-                return {"ok": False, "error": "unsupported_sdk_method"}
-            result = await asyncio.to_thread(fn, action=action, params=params)
-            return {"ok": True, "action": action, "result": _normalize_value(result)}
+            payload: dict[str, Any] = {"arguments": params}
+            if conn_id:
+                payload["connected_account_id"] = conn_id
+                payload["entity_id"] = "default"
+
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{COMPOSIO_API}/api/v3.1/tools/execute/{action}",
+                    headers=self._headers(),
+                    json=payload,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+
+            successful = result.get("successful") or result.get("successfull", False)
+            return {
+                "ok": successful,
+                "action": action,
+                "result": result.get("data", result),
+                "error": result.get("error"),
+            }
+        except httpx.HTTPStatusError as exc:
+            error_body = {}
+            try:
+                error_body = exc.response.json()
+            except Exception:
+                pass
+            error_msg = (
+                error_body.get("error", {}).get("message", "")
+                if isinstance(error_body.get("error"), dict)
+                else str(error_body.get("error", exc))
+            )
+            logger.exception("composio execute failed: %s", error_msg)
+            return {
+                "ok": False,
+                "error": "execute_failed",
+                "message": error_msg,
+                "action": action,
+            }
         except Exception as exc:
             logger.exception("composio execute failed")
             return {
@@ -118,44 +166,28 @@ class ComposioIntegration:
             }
 
     async def manage_connection(self, toolkit: str) -> dict[str, Any]:
-        ts = self._ensure_toolset()
-        if ts is None:
+        if not self.api_key:
             return {
                 "ok": False,
                 "error": "composio_not_configured",
                 "message": "Composio isn't configured.",
             }
         try:
-            fn = getattr(ts, "initiate_connection", None)
-            if fn is None:
-                return {"ok": False, "error": "unsupported_sdk_method"}
-            result = await asyncio.to_thread(fn, app=toolkit.upper())
-            return {"ok": True, "toolkit": toolkit, "result": _normalize_value(result)}
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{COMPOSIO_API}/api/v3/connected_accounts/link",
+                    headers=self._headers(),
+                    json={
+                        "toolkit_slug": toolkit.lower(),
+                        "user_id": "default",
+                    },
+                )
+                resp.raise_for_status()
+                result = resp.json()
+            return {"ok": True, "toolkit": toolkit, "result": result}
         except Exception as exc:
             logger.exception("composio connect failed")
             return {"ok": False, "error": "connect_failed", "message": str(exc)}
-
-
-def _normalize_actions(actions: Any) -> list[dict[str, Any]]:
-    if actions is None:
-        return []
-    if isinstance(actions, list):
-        return [_normalize_value(a) for a in actions]
-    return [_normalize_value(actions)]
-
-
-def _normalize_value(value: Any) -> Any:
-    if hasattr(value, "model_dump"):
-        return value.model_dump()
-    if hasattr(value, "dict") and callable(value.dict):
-        return value.dict()
-    if isinstance(value, dict):
-        return {k: _normalize_value(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_normalize_value(v) for v in value]
-    if isinstance(value, (str, int, float, bool, type(None))):
-        return value
-    return str(value)
 
 
 def build_composio_tools(composio: ComposioIntegration) -> list[Tool]:
@@ -212,7 +244,8 @@ def build_composio_tools(composio: ComposioIntegration) -> list[Tool]:
             description=(
                 "Execute a specific Composio action (e.g. GMAIL_SEND_EMAIL, "
                 "APOLLO_PEOPLE_SEARCH, SLACK_SEND_MESSAGE). Call composio_discover_tools "
-                "first if you don't know the action name."
+                "first if you don't know the action name. For GMAIL_SEND_EMAIL, params "
+                "should include: recipient_email, subject, body."
             ),
             parameters={
                 "type": "object",
