@@ -18,10 +18,9 @@ import logging
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -33,7 +32,7 @@ logger = logging.getLogger("stress_test")
 # Bug model
 # ---------------------------------------------------------------------------
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     CRITICAL = "critical"   # App crash, data loss, security issue
     HIGH = "high"           # Feature completely broken
     MEDIUM = "medium"       # Feature partially broken or wrong behavior
@@ -96,7 +95,7 @@ class StressTestRunner:
             logger.info("=" * 60)
             logger.info("GTM-OS STRESS TEST FRAMEWORK")
             logger.info(f"Target: {self.base}")
-            logger.info(f"Started: {datetime.now(timezone.utc).isoformat()}")
+            logger.info(f"Started: {datetime.now(UTC).isoformat()}")
             logger.info("=" * 60)
 
             # --- Category 1: Health & Core ---
@@ -1079,14 +1078,13 @@ class StressTestRunner:
     async def _test_get_template_not_found(self) -> None:
         async def _run():
             r = await self._req("GET", "/api/templates/nonexistent-tmpl-id")
-            if r.status_code != 404:
-                if r.status_code >= 500:
-                    return self._fail(
-                        "get_template_not_found", "Templates",
-                        "GET /api/templates/nonexistent",
-                        "Non-existent template causes server error", Severity.MEDIUM,
-                        "Should 404", "404", f"{r.status_code}", r,
-                    )
+            if r.status_code != 404 and r.status_code >= 500:
+                return self._fail(
+                    "get_template_not_found", "Templates",
+                    "GET /api/templates/nonexistent",
+                    "Non-existent template causes server error", Severity.MEDIUM,
+                    "Should 404", "404", f"{r.status_code}", r,
+                )
             return self._pass("get_template_not_found", "Templates", f"status={r.status_code}")
         await self._timed_test("get_template_not_found", "Templates", _run())
 
@@ -1259,10 +1257,9 @@ class StressTestRunner:
     async def _test_list_apps(self) -> None:
         async def _run():
             r = await self._req("GET", "/api/integrations/apps")
-            if r.status_code != 200:
+            if r.status_code != 200 and r.status_code >= 500:
                 # May fail if Composio not configured — that's OK
-                if r.status_code >= 500:
-                    return self._fail(
+                return self._fail(
                         "list_apps", "Integrations", "GET /api/integrations/apps",
                         f"Server error: {r.status_code}", Severity.MEDIUM,
                         "Should handle missing Composio gracefully",
@@ -1479,7 +1476,7 @@ class StressTestRunner:
         async def _run():
             # 50 rapid sequential requests
             errors = 0
-            for i in range(50):
+            for _i in range(50):
                 try:
                     r = await self._req("GET", "/api/health")
                     if r.status_code >= 500:
@@ -1501,21 +1498,21 @@ class StressTestRunner:
     # -----------------------------------------------------------------------
 
     def generate_report(self) -> str:
-        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        now = datetime.now(UTC).isoformat(timespec="seconds")
         total = len(self.results)
         passed = sum(1 for r in self.results if r.passed)
         failed = total - passed
 
         lines = [
-            f"# GTM-OS Stress Test Bug Report",
-            f"",
+            "# GTM-OS Stress Test Bug Report",
+            "",
             f"**Generated:** {now}",
             f"**Target:** {self.base}",
             f"**Total Tests:** {total}",
             f"**Passed:** {passed}",
             f"**Failed:** {failed}",
             f"**Bugs Found:** {len(self.bugs)}",
-            f"",
+            "",
         ]
 
         # Summary table
