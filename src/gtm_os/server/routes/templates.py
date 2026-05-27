@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from ..validation import sanitize_text
 
 router = APIRouter()
 
@@ -18,10 +20,33 @@ class SaveTemplateBody(BaseModel):
     hypothesis_pattern: str | None = None
     token_budget: int = 200_000
 
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = sanitize_text(v)
+        if not v:
+            raise ValueError("name must not be empty")
+        return v
+
+    @field_validator("description", "hypothesis_pattern", mode="before")
+    @classmethod
+    def sanitize_optional_text(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return sanitize_text(v)
+
 
 class CreateFromTemplateBody(BaseModel):
     name: str
     overrides: dict[str, Any] | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = sanitize_text(v)
+        if not v:
+            raise ValueError("name must not be empty")
+        return v
 
 
 @router.get("/templates")
