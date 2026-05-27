@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
@@ -257,6 +257,8 @@ export default function Chat({
     activeSessionKeys.unshift(currentKey);
   }
 
+  const turns = useMemo(() => groupIntoTurns(messages), [messages]);
+
   return (
     <div className="flex h-full w-full flex-col">
       {/* Session tab strip */}
@@ -354,8 +356,8 @@ export default function Chat({
           </div>
         )}
 
-        {messages.map((m) => (
-          <Message key={m.id} m={m} />
+        {turns.map((turn, i) => (
+          <Turn key={turn.key ?? i} turn={turn} />
         ))}
       </div>
 
@@ -398,30 +400,131 @@ export default function Chat({
   );
 }
 
-function Message({ m }: { m: UIMessage }) {
-  if (m.role === "tool") {
-    return (
-      <div className="my-2 rounded-xl glass-subtle px-3 py-2 text-xs text-gray-500">
-        <div className="flex items-center justify-between">
-          <span className="font-mono">
-            {m.pending ? "→" : m.ok ? "✓" : "✗"} {m.tool_name}
-          </span>
+/* ── Turn grouping ─────────────────────────────────────────────── */
+
+interface MessageTurn {
+  key: string;
+  user?: UIMessage;
+  tools: UIMessage[];
+  assistant?: UIMessage;
+  system: UIMessage[];
+}
+
+function groupIntoTurns(msgs: UIMessage[]): MessageTurn[] {
+  const turns: MessageTurn[] = [];
+  let current: MessageTurn = { key: "t-0", tools: [], system: [] };
+
+  for (const m of msgs) {
+    if (m.role === "user") {
+      if (current.user || current.assistant || current.tools.length || current.system.length) {
+        turns.push(current);
+      }
+      current = { key: m.id, user: m, tools: [], system: [] };
+    } else if (m.role === "tool") {
+      current.tools.push(m);
+    } else if (m.role === "assistant") {
+      current.assistant = m;
+    } else if (m.role === "system") {
+      current.system.push(m);
+    }
+  }
+  if (current.user || current.assistant || current.tools.length || current.system.length) {
+    turns.push(current);
+  }
+  return turns;
+}
+
+/* ── Turn renderer ────────────────────────────────────────────── */
+
+function Turn({ turn }: { turn: MessageTurn }) {
+  return (
+    <>
+      {turn.user && <MessageBubble m={turn.user} />}
+      {turn.tools.length > 0 && <ToolCallGroup tools={turn.tools} />}
+      {turn.system.map((s) => (
+        <div key={s.id} className="my-2 rounded-xl border border-amber-400/20 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          {s.content}
         </div>
-        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
-          {m.content}
-        </pre>
-      </div>
-    );
-  }
+      ))}
+      {turn.assistant && <MessageBubble m={turn.assistant} />}
+    </>
+  );
+}
 
-  if (m.role === "system") {
-    return (
-      <div className="my-2 rounded-xl border border-amber-400/20 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-        {m.content}
-      </div>
-    );
-  }
+/* ── Collapsible tool call group ──────────────────────────────── */
 
+function ToolCallGroup({ tools }: { tools: UIMessage[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const allDone = tools.every((t) => !t.pending);
+  const anyFailed = tools.some((t) => t.ok === false);
+  const pending = tools.filter((t) => t.pending).length;
+
+  const summary = pending > 0
+    ? `Running ${pending} tool${pending > 1 ? "s" : ""}…`
+    : anyFailed
+      ? `${tools.length} tool call${tools.length > 1 ? "s" : ""} (some failed)`
+      : `${tools.length} tool call${tools.length > 1 ? "s" : ""} completed`;
+
+  return (
+    <div className="my-2">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className={clsx(
+          "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs transition-all",
+          "glass-subtle hover:bg-black/[0.04]",
+          anyFailed && allDone ? "text-red-500" : "text-gray-500",
+        )}
+      >
+        <span
+          className={clsx(
+            "inline-flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold",
+            pending > 0
+              ? "bg-blue-500/10 text-blue-500 animate-pulse"
+              : anyFailed
+                ? "bg-red-500/10 text-red-500"
+                : "bg-emerald-500/10 text-emerald-600",
+          )}
+        >
+          {pending > 0 ? "⟳" : anyFailed ? "✗" : "✓"}
+        </span>
+        <span className="flex-1 text-left font-medium">{summary}</span>
+        <span
+          className={clsx(
+            "text-[10px] transition-transform",
+            expanded && "rotate-180",
+          )}
+        >
+          ▾
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="mt-1 space-y-1 pl-2">
+          {tools.map((t) => (
+            <div
+              key={t.id}
+              className="rounded-lg glass-subtle px-3 py-2 text-xs text-gray-500"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[11px]">
+                  {t.pending ? "→" : t.ok ? "✓" : "✗"}
+                </span>
+                <span className="font-mono font-medium">{t.tool_name}</span>
+              </div>
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-gray-400">
+                {t.content}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Message bubble (user / assistant) ────────────────────────── */
+
+function MessageBubble({ m }: { m: UIMessage }) {
   return (
     <div
       className={clsx(

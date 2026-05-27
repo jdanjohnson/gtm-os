@@ -6,7 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -106,6 +106,13 @@ def create_app(config: Config | None = None) -> FastAPI:
             "cua_configured": gtm.cua.configured,
             "primitives_dir": str(gtm.config.primitives_dir),
         }
+
+    @app.middleware("http")
+    async def no_cache_api(request: Request, call_next):
+        response: Response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     app.include_router(brand_route.router, prefix="/api")
     app.include_router(chat_route.router, prefix="/api")
