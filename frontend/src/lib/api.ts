@@ -140,7 +140,7 @@ export async function pauseExperiment(id: string) {
   });
 }
 
-export async function resumeExperiment(id: string, target_phase = "design") {
+export async function resumeExperiment(id: string, target_phase = "auto") {
   return json<{ experiment: Experiment }>(
     `/api/experiments/${id}/resume?target_phase=${encodeURIComponent(target_phase)}`,
     { method: "POST" },

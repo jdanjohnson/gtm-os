@@ -144,7 +144,7 @@ async def pause_experiment(experiment_id: str, request: Request):
 
 
 @router.post("/experiments/{experiment_id}/resume")
-async def resume_experiment(experiment_id: str, request: Request, target_phase: str = "design"):
+async def resume_experiment(experiment_id: str, request: Request, target_phase: str = "auto"):
     gtm = request.app.state.gtm
     exp = gtm.runner.resume(experiment_id, target_phase=target_phase)
     if not exp:
