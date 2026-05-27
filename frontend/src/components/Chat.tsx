@@ -340,7 +340,7 @@ export default function Chat({
       {/* Messages area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-4"
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
       >
         {messages.length === 0 && (
           <div className="glass-heavy rounded-2xl p-5 text-sm">
@@ -362,8 +362,8 @@ export default function Chat({
       </div>
 
       {/* Input area */}
-      <div className="border-t border-black/[0.05] px-3 py-3">
-        <div className="flex items-center gap-2 rounded-full glass-heavy px-4 py-1">
+      <div className="border-t border-black/[0.05] px-2 py-2 sm:px-3 sm:py-3">
+        <div className="flex items-center gap-2 rounded-full glass-heavy px-3 py-1 sm:px-4">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -511,7 +511,7 @@ function ToolCallGroup({ tools }: { tools: UIMessage[] }) {
                 </span>
                 <span className="font-mono font-medium">{t.tool_name}</span>
               </div>
-              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-gray-400">
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[10px] text-gray-400">
                 {t.content}
               </pre>
             </div>
@@ -532,23 +532,23 @@ function MessageBubble({ m }: { m: UIMessage }) {
         m.role === "user" ? "justify-end" : "justify-start",
       )}
     >
-      <div className="flex gap-2 max-w-[92%]">
+      <div className="flex min-w-0 gap-2 max-w-[95%] sm:max-w-[92%]">
         {m.role === "assistant" && (
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-coral to-[#FF8A65] text-[11px] font-bold text-white">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-coral to-[#FF8A65] text-[10px] font-bold text-white sm:h-7 sm:w-7 sm:text-[11px]">
             G
           </div>
         )}
-        <div>
+        <div className="min-w-0 flex-1">
           <div
             className={clsx(
-              "rounded-2xl px-3.5 py-2.5",
+              "rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2.5",
               m.role === "user"
                 ? "bg-coral text-white shadow-[0_2px_8px_rgba(239,99,68,0.25)]"
                 : "glass-heavy text-gray-900",
               m.pending && "opacity-90",
             )}
           >
-            <div className="prose-chat">
+            <div className="prose-chat break-words overflow-hidden">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {m.content || (m.pending ? "…" : "")}
               </ReactMarkdown>
@@ -556,7 +556,7 @@ function MessageBubble({ m }: { m: UIMessage }) {
           </div>
         </div>
         {m.role === "user" && (
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[11px] font-bold text-blue-600">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[10px] font-bold text-blue-600 sm:h-7 sm:w-7 sm:text-[11px]">
             J
           </div>
         )}

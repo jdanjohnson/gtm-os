@@ -35,8 +35,9 @@ export type SidebarView =
 
 export default function App() {
   const [sidebarView, setSidebarView] = useState<SidebarView>("dashboard");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 768);
+  const [chatCollapsed, setChatCollapsed] = useState(window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [primitives, setPrimitives] = useState<PrimitivesSummary | null>(null);
@@ -50,6 +51,15 @@ export default function App() {
     getHealth().then(setHealth).catch(() => null);
     getPrimitives().then(setPrimitives).catch(() => null);
     listMemory().then((d) => setMemoryCount(d.memories.length)).catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   // Periodically fetch experiments.
@@ -207,7 +217,7 @@ export default function App() {
         />
 
         {/* Content area */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto">
           {renderContent()}
         </main>
 
@@ -222,7 +232,12 @@ export default function App() {
             </span>
           </button>
         ) : (
-          <aside className="flex w-[380px] shrink-0 flex-col border-l border-white/30 glass">
+          <aside className={clsx(
+            "flex shrink-0 flex-col border-l border-white/30 glass",
+            isMobile
+              ? "fixed inset-0 z-50 w-full"
+              : "w-[340px] lg:w-[380px]",
+          )}>
             <div className="flex items-center justify-between border-b border-black/[0.05] px-4 py-2">
               <div className="flex items-center gap-2.5">
                 <span className="text-[14px] font-semibold text-gray-900">Chat</span>
@@ -235,7 +250,7 @@ export default function App() {
                 onClick={() => setChatCollapsed(true)}
                 className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-black/[0.04] hover:text-gray-700"
               >
-                <span className="text-xs">−</span>
+                <span className="text-xs">{isMobile ? "✕" : "−"}</span>
               </button>
             </div>
             <Chat
