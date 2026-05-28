@@ -78,6 +78,8 @@ body,
 /* Chat markdown */
 .prose-chat {
   @apply text-sm leading-6;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .prose-chat p {
@@ -94,15 +96,28 @@ body,
 }
 
 .prose-chat code {
-  @apply rounded bg-black/5 px-1 py-0.5 text-xs;
+  @apply rounded bg-black/5 px-1 py-0.5 text-xs break-all;
 }
 
 .prose-chat pre {
-  @apply rounded bg-black/5 p-3 text-xs overflow-x-auto;
+  @apply rounded bg-black/5 p-2 text-xs overflow-x-auto;
+  max-width: 100%;
+}
+
+.prose-chat pre code {
+  @apply break-normal;
 }
 
 .prose-chat a {
-  @apply text-coral underline underline-offset-2;
+  @apply text-coral underline underline-offset-2 break-all;
+}
+
+.prose-chat table {
+  @apply w-full text-xs overflow-x-auto block;
+}
+
+.prose-chat img {
+  @apply max-w-full h-auto;
 }
 
 /* ── Component classes used by ExperimentDetail/ExperimentList ── */
